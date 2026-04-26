@@ -43,10 +43,6 @@ This is a living document. Each step gets checked off as it's done.
   - Deployment adapter → **Railway**
   - Add-ons → **Compiler**
 
-- [ ] Set up project structure and review generated files
-- [ ] Configure environment variables (`.env`)
-- [ ] Verify dev server runs and Railway config is wired up
-
 ---
 
 ## Status
