@@ -62,6 +62,34 @@ This is a living document. Each step gets checked off as it's done.
   - 🛣️ Added static route `/products`
   - 🔍 Added dynamic route `/products/$id`
 
+- [x] **Step 3 — Replace Tailwind with shadcn/ui** 🎨
+
+  TanStack Start ships with Tailwind by default — we replace it with shadcn/ui for a proper component library foundation.
+
+  Go to https://ui.shadcn.com/create?preset=bcj03CWG&template=start&base=base and configure to your requirements:
+  - Template → **TanStack Start**
+  - Base UI → **Base**
+  - Enable **pointer** on buttons
+
+  Then run the generated init command:
+
+  ```bash
+  npx shadcn@latest init --preset bcj03CWG --base base --template start --pointer
+  ```
+
+  Add the `card` component:
+
+  ```bash
+  npx shadcn@latest add card
+  ```
+
+  Finally, remove the auto-generated import from `src/styles.css` — it's no longer needed:
+
+  ```css
+  /* remove this line */
+  @import "shadcn/tailwind.css";
+  ```
+
 ---
 
 ## Status
