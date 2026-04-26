@@ -31,7 +31,7 @@ This is a living document. Each step gets checked off as it's done.
 
 ### Phase 1 — Project Foundation
 
-- [x] **Scaffold the project** with the TanStack CLI
+- [x] **Step 1 — Scaffold the project** with the TanStack CLI
 
   ```bash
   npx @tanstack/cli@latest create
@@ -42,6 +42,25 @@ This is a living document. Each step gets checked off as it's done.
   - Toolchain → **Biome**
   - Deployment adapter → **Railway**
   - Add-ons → **Compiler**
+
+- [x] **Step 2 — Cleanup, Header & product routes** 🧹
+
+  Stripped the boilerplate, built the first component, and added the product routes.
+
+  ```
+  src/
+  ├── components/
+  │   └── Header.tsx       ← basic header component
+  └── routes/
+      ├── products.tsx     ← static route /products
+      └── products.$id.tsx ← dynamic route /products/$id
+  ```
+
+  What was done:
+  - 🗑️ Removed unused boilerplate code and placeholder files
+  - 🏗️ Created a basic `Header` component
+  - 🛣️ Added static route `/products`
+  - 🔍 Added dynamic route `/products/$id`
 
 ---
 
