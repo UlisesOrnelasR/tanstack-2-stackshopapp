@@ -62,9 +62,9 @@ This is a living document. Each step gets checked off as it's done.
   - 🛣️ Added static route `/products`
   - 🔍 Added dynamic route `/products/$id`
 
-- [x] **Step 3 — Replace Tailwind with shadcn/ui** 🎨
+- [x] **Step 3 — Add shadcn/ui on top of Tailwind** 🎨
 
-  TanStack Start ships with Tailwind by default — we replace it with shadcn/ui for a proper component library foundation.
+  TanStack Start ships with Tailwind by default — we keep it and layer shadcn/ui on top for a proper component library foundation.
 
   Go to https://ui.shadcn.com/create?preset=bcj03CWG&template=start&base=base and configure to your requirements:
   - Template → **TanStack Start**
@@ -89,6 +89,8 @@ This is a living document. Each step gets checked off as it's done.
   /* remove this line */
   @import "shadcn/tailwind.css";
   ```
+
+- [x] **Step 4 — Base Header design** 🏠
 
 ---
 
