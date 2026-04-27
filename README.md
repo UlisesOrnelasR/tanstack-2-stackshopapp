@@ -92,6 +92,14 @@ This is a living document. Each step gets checked off as it's done.
 
 - [x] **Step 4 — Base Header design** 🏠
 
+  Styled the `Header` component and added the global layout wrapper in `__root.tsx`.
+
+  In `src/routes/__root.tsx`, the `RootDocument` shell wraps the entire app with a background and constrains the content:
+
+  What was done:
+  - 🎨 Outer `div` sets full-height background and base text colors (light + dark mode)
+  - 📐 `<main>` centers content with `mx-auto`, caps width at `max-w-6xl`, and adds horizontal (`px-4`) and vertical (`py-6`) padding
+
 ---
 
 ## Status
