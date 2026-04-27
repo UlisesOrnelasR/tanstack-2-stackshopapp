@@ -102,6 +102,81 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+### Phase 2 — Data Layer & Product Display
+
+- [x] **Step 5 — Fake product data & server loader** 🗄️
+
+  Wired up the home page with real data flow using TanStack Router's `loader` — the closest thing to a server function in this stack.
+
+  Created a local seed file to act as the fake data source (same shape as a real product API like `fakestoreapi.com`):
+
+  ```
+  src/
+  └── db/
+      └── seed.ts    ← sampleProducts array — fake catalog data
+  ```
+
+  The `loader` in `src/routes/index.tsx` runs on the server, grabs the first 3 products, and passes them to the component via `Route.useLoaderData()`:
+
+  ```ts
+  export const Route = createFileRoute("/")({
+    loader: async () => {
+      return { products: sampleProducts.slice(0, 3) };
+    },
+    component: App,
+  });
+  ```
+
+  Each product has this shape:
+
+  | Field         | Type      | Description                                         |
+  | ------------- | --------- | --------------------------------------------------- |
+  | `name`        | `string`  | Product name                                        |
+  | `description` | `string`  | Short description                                   |
+  | `price`       | `string`  | Price as a string (e.g. `"99.99"`)                  |
+  | `badge`       | `string?` | Optional label shown as a pill (e.g. `"New"`)       |
+  | `rating`      | `string`  | Star rating (e.g. `"4.8"`)                          |
+  | `reviews`     | `number`  | Total review count                                  |
+  | `image`       | `string`  | Path to the product image                           |
+  | `inventory`   | `string`  | Status: `"in-stock"` · `"backorder"` · `"preorder"` |
+
+  What was done:
+  - 🗄️ Created `src/db/seed.ts` with 8 sample products
+  - ⚙️ Added a `loader` to the index route — runs server-side before render
+  - 🔗 Consumed loader data in the component via `Route.useLoaderData()`
+  - 🪟 Sliced the first 3 products for the featured section on the home page
+
+- [x] **Step 6 — ProductCard component** 🃏
+
+  Built the base `ProductCard` component used to display individual products in the grid.
+
+  ```
+  src/
+  └── components/
+      └── ui/
+          └── ProductCard.tsx    ← base product card component
+  ```
+
+  The card is wrapped in a `<Link>` to navigate to `/products/$id` and composes shadcn/ui primitives (`Card`, `CardHeader`, `CardContent`, `CardFooter`).
+
+  Key design decisions:
+  - 🏷️ Optional `badge` pill rendered conditionally (e.g. "New")
+  - ⭐ Rating + review count in the content area
+  - 🟢 Inventory status badge with color-coded styles:
+    - `in-stock` → emerald
+    - `backorder` → amber
+    - `preorder` → indigo
+  - 🛒 "Add to Cart" button uses `e.preventDefault()` + `e.stopPropagation()` to prevent navigation while inside the `<Link>` wrapper
+
+  ```
+  src/
+  └── components/
+      └── ui/
+          └── ProductCard.tsx
+  ```
+
+---
+
 ## Status
 
-> **Phase 1 — In Progress** 🚧
+> **Phase 2 — working product page...**
