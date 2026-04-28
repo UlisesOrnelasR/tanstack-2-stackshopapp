@@ -25,6 +25,28 @@
 
 ---
 
+## Architecture Overview
+
+### Component Map
+
+```
+src/
+├── routes/
+│   ├── __root.tsx          ← Global shell (layout, fonts, scripts)
+│   ├── index.tsx           ← / Home — loader + featured grid
+│   └── products/
+│       ├── index.tsx       ← /products — createServerFn + full catalog
+│       └── $id.tsx         ← /products/$id — dynamic detail
+├── components/
+│   ├── Header.tsx          ← Top nav bar
+│   └── ui/
+│       └── ProductCard.tsx ← Reusable product card
+└── db/
+    └── seed.ts             ← Fake product catalog (8 items)
+```
+
+---
+
 ## Build Log — Step by Step
 
 This is a living document. Each step gets checked off as it's done.
@@ -57,10 +79,10 @@ This is a living document. Each step gets checked off as it's done.
   ```
 
   What was done:
-  - 🗑️ Removed unused boilerplate code and placeholder files
-  - 🏗️ Created a basic `Header` component
-  - 🛣️ Added static route `/products`
-  - 🔍 Added dynamic route `/products/$id`
+  - Removed unused boilerplate code and placeholder files
+  - Created a basic `Header` component
+  - Added static route `/products`
+  - Added dynamic route `/products/$id`
 
 - [x] **Step 3 — Add shadcn/ui on top of Tailwind** 🎨
 
@@ -97,14 +119,14 @@ This is a living document. Each step gets checked off as it's done.
   In `src/routes/__root.tsx`, the `RootDocument` shell wraps the entire app with a background and constrains the content:
 
   What was done:
-  - 🎨 Outer `div` sets full-height background and base text colors (light + dark mode)
-  - 📐 `<main>` centers content with `mx-auto`, caps width at `max-w-6xl`, and adds horizontal (`px-4`) and vertical (`py-6`) padding
+  - Outer `div` sets full-height background and base text colors (light + dark mode)
+  - `<main>` centers content with `mx-auto`, caps width at `max-w-6xl`, and adds horizontal (`px-4`) and vertical (`py-6`) padding
 
 ---
 
 ### Phase 2 — Data Layer & Product Display
 
-- [x] **Step 5 — Fake product data & server loader** 🗄️
+- [x] **Step 1 — Fake product data & server loader** 🗄️
 
   Wired up the home page with real data flow using TanStack Router's `loader` — the closest thing to a server function in this stack.
 
@@ -141,12 +163,12 @@ This is a living document. Each step gets checked off as it's done.
   | `inventory`   | `string`  | Status: `"in-stock"` · `"backorder"` · `"preorder"` |
 
   What was done:
-  - 🗄️ Created `src/db/seed.ts` with 8 sample products
-  - ⚙️ Added a `loader` to the index route — runs server-side before render
-  - 🔗 Consumed loader data in the component via `Route.useLoaderData()`
-  - 🪟 Sliced the first 3 products for the featured section on the home page
+  - Created `src/db/seed.ts` with 8 sample products
+  - Added a `loader` to the index route — runs server-side before render
+  - Consumed loader data in the component via `Route.useLoaderData()`
+  - Sliced the first 3 products for the featured section on the home page
 
-- [x] **Step 6 — ProductCard component** 🃏
+- [x] **Step 2 — ProductCard component** 🃏
 
   Built the base `ProductCard` component used to display individual products in the grid.
 
@@ -160,23 +182,46 @@ This is a living document. Each step gets checked off as it's done.
   The card is wrapped in a `<Link>` to navigate to `/products/$id` and composes shadcn/ui primitives (`Card`, `CardHeader`, `CardContent`, `CardFooter`).
 
   Key design decisions:
-  - 🏷️ Optional `badge` pill rendered conditionally (e.g. "New")
-  - ⭐ Rating + review count in the content area
-  - 🟢 Inventory status badge with color-coded styles:
+  - Optional `badge` pill rendered conditionally (e.g. "New")
+  - Rating + review count in the content area
+  - Inventory status badge with color-coded styles:
     - `in-stock` → emerald
     - `backorder` → amber
     - `preorder` → indigo
-  - 🛒 "Add to Cart" button uses `e.preventDefault()` + `e.stopPropagation()` to prevent navigation while inside the `<Link>` wrapper
+  - "Add to Cart" button uses `e.preventDefault()` + `e.stopPropagation()` to prevent navigation while inside the `<Link>` wrapper
+
+- [x] **Step 3 — Products catalog page** 🗂️
+
+  Built the full `/products` catalog page that fetches and displays all products using a **server function** — a step up from the plain `loader` used on the home page.
 
   ```
   src/
-  └── components/
-      └── ui/
-          └── ProductCard.tsx
+  └── routes/
+      └── products/
+          └── index.tsx    ← /products catalog route
   ```
 
----
+  Key differences from the home page `loader`:
+
+  | Feature        | Home (`/`)      | Catalog (`/products`)   |
+  | -------------- | --------------- | ----------------------- |
+  | Data source    | inline `loader` | `createServerFn`        |
+  | Products shown | 3 (sliced)      | All 8                   |
+  | Layout         | featured grid   | header card + full grid |
+
+  The `createServerFn` pattern isolates the data-fetching logic and makes it independently callable — it's not tied to the route lifecycle like a `loader`:
+
+  ```ts
+  const fetchProducts = createServerFn({ method: "GET" }).handler(async () => {
+    return sampleProducts;
+  });
+
+  export const Route = createFileRoute("/products/")({
+    loader: async () => fetchProducts(),
+    component: RouteComponent,
+  });
+  ```
 
 ## Status
 
-> **Phase 2 — working product page...**
+> **Phase 2 — complete. Products catalog page live.**
