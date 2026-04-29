@@ -18,7 +18,6 @@ export const Route = createFileRoute("/")({
 
 function App() {
 	const { products } = Route.useLoaderData();
-	console.log(products);
 
 	return (
 		<div className="space-y-12 bg-linear-to-b from-slate-50 via-white to-slate-50 p-6">

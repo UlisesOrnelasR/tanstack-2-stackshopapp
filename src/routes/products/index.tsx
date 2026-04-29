@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
+import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { ProductCard } from "#/components/ui/ProductCard";
 import { sampleProducts } from "#/db/seed";
 import {
@@ -13,17 +13,48 @@ const fetchProducts = createServerFn({ method: "GET" }).handler(async () => {
 	return sampleProducts;
 });
 
+const loggerMiddleware = createMiddleware().server(
+	async ({ next, request }) => {
+		console.log(
+			"-----loggerMiddleware----",
+			request.url,
+			"from",
+			request.headers.get("origin"),
+		);
+		return next();
+	},
+);
+
 export const Route = createFileRoute("/products/")({
 	loader: async () => {
 		return fetchProducts();
 	},
 	component: RouteComponent,
+	server: {
+		middleware: [loggerMiddleware],
+		handlers: {
+			POST: async ({ request }) => {
+				let body = null;
+
+				try {
+					body = await request.json();
+				} catch {
+					body = {};
+				}
+
+				return Response.json({
+					message: "Hello, world from POST request",
+					body,
+				});
+			},
+		},
+	},
 });
 
 function RouteComponent() {
 	const products = Route.useLoaderData();
 
-	console.log(products);
+	// console.log(products);
 
 	return (
 		<div className="space-y-6">

@@ -222,6 +222,59 @@ This is a living document. Each step gets checked off as it's done.
   });
   ```
 
+- [x] **Step 4 — Route Middleware** 🔍
+
+  Added server-side middleware to the `/products` route using `createMiddleware` from `@tanstack/react-start`.
+
+  **What is middleware here?**
+
+  In TanStack Start, middleware runs on the server **before** the route handler executes. It intercepts the request, can inspect or modify it, and must call `next()` to pass control forward — same mental model as Express or Hono middleware.
+
+  ```ts
+  // src/routes/products/index.tsx
+
+  const loggerMiddleware = createMiddleware().server(
+    async ({ next, request }) => {
+      console.log(
+        "-----loggerMiddleware----",
+        request.url, // full URL of the incoming request
+        "from",
+        request.headers.get("origin"), // where the request came from
+      );
+      return next(); // REQUIRED — without this the route never loads
+    },
+  );
+  ```
+
+  **How it's wired to the route:**
+
+  The `server` config key on `createFileRoute` accepts a `middleware` array. Every entry runs in order before any loader or handler on that route:
+
+  ```ts
+  export const Route = createFileRoute("/products/")({
+    loader: async () => fetchProducts(),
+    component: RouteComponent,
+    server: {
+      middleware: [loggerMiddleware], // ← runs first, on every request to /products
+      handlers: {
+        POST: async ({ request }) => {
+          // ← custom HTTP verb handlers
+          const body = await request.json().catch(() => ({}));
+          return Response.json({ message: "Hello from POST", body });
+        },
+      },
+    },
+  });
+  ```
+
+  | Key          | What it does                                                               |
+  | ------------ | -------------------------------------------------------------------------- |
+  | `middleware` | Array of middleware that intercept every request to this route             |
+  | `handlers`   | Custom HTTP method handlers (`POST`, `PUT`, etc.) beyond the default `GET` |
+  | `next()`     | Passes control to the next middleware or to the route itself — mandatory   |
+
+---
+
 ## Status
 
-> **Phase 2 — complete. Products catalog page live.**
+> **Phase 2 — working...**
