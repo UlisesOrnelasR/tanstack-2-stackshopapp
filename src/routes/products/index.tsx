@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { ProductCard } from "#/components/ui/ProductCard";
@@ -8,10 +9,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-
-const fetchProducts = createServerFn({ method: "GET" }).handler(async () => {
-	return sampleProducts;
-});
 
 const loggerMiddleware = createMiddleware().server(
 	async ({ next, request }) => {
@@ -25,23 +22,26 @@ const loggerMiddleware = createMiddleware().server(
 	},
 );
 
+const fetchProducts = createServerFn({ method: "GET" }).handler(async () => {
+	return sampleProducts;
+});
+
 export const Route = createFileRoute("/products/")({
 	loader: async () => {
 		return fetchProducts();
 	},
+
 	component: RouteComponent,
 	server: {
 		middleware: [loggerMiddleware],
 		handlers: {
 			POST: async ({ request }) => {
 				let body = null;
-
 				try {
 					body = await request.json();
 				} catch {
 					body = {};
 				}
-
 				return Response.json({
 					message: "Hello, world from POST request",
 					body,
@@ -53,8 +53,13 @@ export const Route = createFileRoute("/products/")({
 
 function RouteComponent() {
 	const products = Route.useLoaderData();
+	const { data } = useQuery({
+		queryKey: ["products"],
+		queryFn: () => fetchProducts(),
+		initialData: products,
+	});
 
-	// console.log(products);
+	console.log(data);
 
 	return (
 		<div className="space-y-6">
@@ -80,7 +85,7 @@ function RouteComponent() {
 			</section>
 			<section>
 				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{products?.map((product, index) => (
+					{data?.map((product, index) => (
 						<ProductCard key={`product-${index}`} product={product} />
 					))}
 				</div>

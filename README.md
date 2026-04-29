@@ -273,6 +273,124 @@ This is a living document. Each step gets checked off as it's done.
   | `handlers`   | Custom HTTP method handlers (`POST`, `PUT`, etc.) beyond the default `GET` |
   | `next()`     | Passes control to the next middleware or to the route itself — mandatory   |
 
+- [x] **Step 5 — TanStack Query integration** ⚡
+
+  Added `@tanstack/react-query` to enable client-side caching and background refetching on top of the existing server-fetched data.
+
+  ```bash
+  npm i @tanstack/react-query @tanstack/react-query-devtools
+  ```
+
+  **Why Query on top of loaders?**
+
+  The `loader` already fetches on the server — but once the page is live, it does nothing. TanStack Query takes over on the client: it caches the data, can refetch in the background, and invalidates stale entries automatically. The `loader` becomes the "first paint" supplier; Query owns the lifecycle after that.
+
+  ---
+
+  **Change 1 — `createRootRouteWithContext`** in `src/routes/__root.tsx`
+
+  Replaced `createRootRoute` with the typed context variant so every child route can access the `queryClient` with full type safety:
+
+  ```ts
+  // before
+  export const Route = createRootRoute({ ... });
+
+  // after
+  export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({ ... });
+  ```
+
+  ---
+
+  **Change 2 — `QueryClientProvider` wraps the app shell** in `src/routes/__root.tsx`
+
+  Created a singleton `queryClient` and wrapped `RootDocument` so every component in the tree can call `useQuery`:
+
+  ```ts
+  const queryClient = new QueryClient();
+
+  function RootDocument({ children }: { children: React.ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        ...
+      </QueryClientProvider>
+    );
+  }
+  ```
+
+  ---
+
+  **Change 3 — inject `queryClient` into the router context** in `src/router.tsx`
+
+  Passed the client through the router's `context` option — this is what makes `context.queryClient` available inside any `loader`:
+
+  ```ts
+  const router = createTanStackRouter({
+    routeTree,
+    context: {
+      queryClient: new QueryClient(),
+    },
+    ...
+  });
+  ```
+
+  ---
+
+  **Change 4 — `useQuery` with `initialData` in `/products`**
+
+  The `loader` still runs on the server and returns the products. `useQuery` receives them via `initialData` — no duplicate network request on mount. After that, Query owns the cache:
+
+  ```ts
+  function RouteComponent() {
+    const products = Route.useLoaderData();       // server data
+
+    const { data } = useQuery({
+      queryKey: ["products"],
+      queryFn: () => fetchProducts(),
+      initialData: products,                      // seed from loader, no extra fetch
+    });
+  }
+  ```
+
+  | Layer      | Runs on | Responsibility                              |
+  | ---------- | ------- | ------------------------------------------- |
+  | `loader`   | Server  | First fetch — data ready before first paint |
+  | `useQuery` | Client  | Cache, background refetch, stale management |
+
+  ---
+
+  **Change 5 — React Query Devtools** in `src/routes/__root.tsx`
+
+  Added the devtools panel so you can inspect the query cache, stale times, and refetch behavior directly in the browser:
+
+  ```ts
+  import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+
+  function RootDocument({ children }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        ...
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    );
+  }
+  ```
+
+  `initialIsOpen={false}` keeps it collapsed by default — click the React Query logo in the corner to open it.
+
+  ---
+
+  **Selective Server-Side Rendering (SSR)**
+
+  TanStack Start lets you control how much of the rendering happens on the server, per route:
+
+  | Mode          | HTML on server | Data on server | Use when                                      |
+  | ------------- | -------------- | -------------- | --------------------------------------------- |
+  | `ssr: true`   | ✅ Full HTML   | ✅ Yes         | SEO-critical pages, fast first paint needed   |
+  | `"data-only"` | ❌ Empty shell | ✅ Yes         | Data ready but HTML rendered on client        |
+  | `ssr: false`  | ❌ Nothing     | ❌ No          | Fully client-side, behind auth, no SEO needed |
+
+  "Selective" means you don't pick one mode for the whole app — each route decides independently. A public `/products` page can run full SSR while a `/dashboard` behind a login runs `ssr: false`.
+
 ---
 
 ## Status
