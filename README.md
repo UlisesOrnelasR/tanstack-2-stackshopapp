@@ -285,7 +285,7 @@ This is a living document. Each step gets checked off as it's done.
 
   The `loader` already fetches on the server — but once the page is live, it does nothing. TanStack Query takes over on the client: it caches the data, can refetch in the background, and invalidates stale entries automatically. The `loader` becomes the "first paint" supplier; Query owns the lifecycle after that.
 
-  ---
+  ***
 
   **Change 1 — `createRootRouteWithContext`** in `src/routes/__root.tsx`
 
@@ -299,7 +299,7 @@ This is a living document. Each step gets checked off as it's done.
   export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({ ... });
   ```
 
-  ---
+  ***
 
   **Change 2 — `QueryClientProvider` wraps the app shell** in `src/routes/__root.tsx`
 
@@ -317,7 +317,7 @@ This is a living document. Each step gets checked off as it's done.
   }
   ```
 
-  ---
+  ***
 
   **Change 3 — inject `queryClient` into the router context** in `src/router.tsx`
 
@@ -333,7 +333,7 @@ This is a living document. Each step gets checked off as it's done.
   });
   ```
 
-  ---
+  ***
 
   **Change 4 — `useQuery` with `initialData` in `/products`**
 
@@ -341,12 +341,12 @@ This is a living document. Each step gets checked off as it's done.
 
   ```ts
   function RouteComponent() {
-    const products = Route.useLoaderData();       // server data
+    const products = Route.useLoaderData(); // server data
 
     const { data } = useQuery({
       queryKey: ["products"],
       queryFn: () => fetchProducts(),
-      initialData: products,                      // seed from loader, no extra fetch
+      initialData: products, // seed from loader, no extra fetch
     });
   }
   ```
@@ -356,7 +356,7 @@ This is a living document. Each step gets checked off as it's done.
   | `loader`   | Server  | First fetch — data ready before first paint |
   | `useQuery` | Client  | Cache, background refetch, stale management |
 
-  ---
+  ***
 
   **Change 5 — React Query Devtools** in `src/routes/__root.tsx`
 
@@ -377,7 +377,7 @@ This is a living document. Each step gets checked off as it's done.
 
   `initialIsOpen={false}` keeps it collapsed by default — click the React Query logo in the corner to open it.
 
-  ---
+  ***
 
   **Selective Server-Side Rendering (SSR)**
 
@@ -393,6 +393,197 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+### Phase 3 — Database Setup with Drizzle + Supabase
+
+- [x] **Step 1 — Install dependencies** 📦
+
+  ```bash
+  npm i drizzle-orm postgres pg
+  npm i -D drizzle-kit
+  npm i --save-dev @types/pg
+  npm i drizzle-orm dotenv
+  npm i -D drizzle-kit tsx
+  ```
+
+  | Package      | Role                                             |
+  | ------------ | ------------------------------------------------ |
+  | `drizzle-orm`| The ORM — type-safe query builder                |
+  | `postgres`   | Native PostgreSQL driver (used by Drizzle)       |
+  | `pg`         | Node.js PostgreSQL driver (for the Pool client)  |
+  | `dotenv`     | Load `.env` vars before running scripts          |
+  | `drizzle-kit`| CLI for migrations, codegen, and Drizzle Studio  |
+  | `tsx`        | Run TypeScript files directly (used for seeding) |
+  | `@types/pg`  | Type definitions for the `pg` driver             |
+
+- [x] **Step 2 — Create a Supabase project** ☁️
+
+  1. Go to [supabase.com](https://supabase.com) and create a new project
+  2. Once created, navigate to **Project Settings → Database**
+  3. Under **Connection string**, select **Session pooler** mode and copy the URI:
+
+  ```
+  postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-1-us-west-2.pooler.supabase.com:5432/postgres
+  ```
+
+  Session pooler works over port `5432` — no firewall issues and compatible with Drizzle's `pg` driver.
+
+- [x] **Step 3 — Configure `.env`** 🔐
+
+  Create a `.env` file at the project root and paste the connection string, replacing `[YOUR-PASSWORD]`:
+
+  ```env
+  DATABASE_URL=postgresql://postgres.<project-ref>:your-password@aws-1-us-west-2.pooler.supabase.com:5432/postgres
+  ```
+
+  > Never commit `.env` — it's already in `.gitignore`.
+
+- [x] **Step 4 — Database client** `src/db/index.ts`
+
+  The client creates a connection pool and exports a typed `db` instance wired to the schema:
+
+  ```ts
+  import { drizzle } from "drizzle-orm/node-postgres";
+  import { Pool } from "pg";
+  import * as schema from "./schema";
+
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is not set");
+  }
+
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL?.includes("supabase")
+      ? { rejectUnauthorized: false }
+      : false,
+  });
+
+  export const db = drizzle(pool, { schema });
+  ```
+
+  The `ssl` block is conditional — it enables SSL only when connecting to Supabase, so local development without SSL still works.
+
+- [x] **Step 5 — Define the schema** `src/db/schema.ts`
+
+  Two tables: `products` (the catalog) and `cart_items` (shopping cart). Both use UUID primary keys and Drizzle enums for constrained string fields.
+
+  ```ts
+  import { integer, numeric, pgEnum, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+
+  export const badgeEnum     = pgEnum("badge",     ["New", "Sale", "Featured", "Limited"]);
+  export const inventoryEnum = pgEnum("inventory", ["in-stock", "backorder", "preorder"]);
+
+  export const products = pgTable("products", {
+    id:          uuid("id").primaryKey().defaultRandom(),
+    name:        varchar("name", { length: 256 }).notNull(),
+    description: text("description").notNull(),
+    price:       numeric("price", { precision: 10, scale: 2 }).notNull(),
+    badge:       badgeEnum("badge"),
+    rating:      numeric("rating", { precision: 3, scale: 2 }).notNull().default("0"),
+    reviews:     integer("reviews").notNull().default(0),
+    image:       varchar("image", { length: 512 }).notNull(),
+    inventory:   inventoryEnum("inventory").notNull().default("in-stock"),
+    createdAt:   timestamp("created_at").defaultNow().notNull(),
+  });
+
+  export const cartItems = pgTable("cart_items", {
+    id:        uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    quantity:  integer("quantity").notNull().default(1),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  });
+
+  // Inferred types — use these everywhere instead of manual interfaces
+  export type ProductSelect   = typeof products.$inferSelect;
+  export type ProductInsert   = typeof products.$inferInsert;
+  export type CartItemSelect  = typeof cartItems.$inferSelect & typeof products.$inferSelect;
+  export type CartItemInsert  = typeof cartItems.$inferInsert;
+  ```
+
+  `$inferSelect` and `$inferInsert` let Drizzle derive the TypeScript types directly from the schema — no duplication.
+
+- [x] **Step 6 — Drizzle config** `drizzle.config.ts`
+
+  ```ts
+  import 'dotenv/config';
+  import { defineConfig } from 'drizzle-kit';
+
+  export default defineConfig({
+    out:     './drizzle',
+    schema:  './src/db/schema.ts',
+    dialect: 'postgresql',
+    dbCredentials: {
+      url: process.env.DATABASE_URL!,
+    },
+  });
+  ```
+
+  | Field       | Purpose                                           |
+  | ----------- | ------------------------------------------------- |
+  | `out`       | Where Drizzle writes migration SQL files          |
+  | `schema`    | Source of truth — your schema definition          |
+  | `dialect`   | Database engine (`postgresql`, `mysql`, `sqlite`) |
+
+- [x] **Step 7 — Add scripts to `package.json`** ⚙️
+
+  ```json
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate":  "drizzle-kit migrate",
+    "db:push":     "drizzle-kit push",
+    "db:studio":   "drizzle-kit studio"
+  }
+  ```
+
+  | Script         | What it does                                              |
+  | -------------- | --------------------------------------------------------- |
+  | `db:generate`  | Reads the schema and generates SQL migration files        |
+  | `db:migrate`   | Applies pending migration files to the database           |
+  | `db:push`      | Pushes the schema directly — no migration files generated |
+  | `db:studio`    | Opens Drizzle Studio (visual DB browser)                  |
+
+  > In production use `generate` + `migrate` for a proper migration history. `push` is fast for prototyping — it diffs and applies directly.
+
+- [x] **Step 8 — Generate and push the schema** 🚀
+
+  Generate the SQL migration files from your schema:
+
+  ```bash
+  npm run db:generate
+  ```
+
+  This writes files to `./drizzle/`. Then push the schema to Supabase:
+
+  ```bash
+  npm run db:push
+  ```
+
+  Once done, open your Supabase project → **Table Editor** — the `products` and `cart_items` tables are there.
+
+- [x] **Step 9 — Seed the database** 🌱
+
+  `src/db/seedDb.ts` inserts 8 sample products. It checks for existing rows before inserting — pass `--reset` to wipe and reseed:
+
+  ```bash
+  npx tsx src/db/seedDb.ts
+  ```
+
+  Output:
+
+  ```
+  🌱 Starting database seed...
+  📦 Inserting sample products...
+  ✅ Products inserted successfully!
+  ```
+
+  Run with reset flag to clear and repopulate:
+
+  ```bash
+  npx tsx src/db/seedDb.ts --reset
+  ```
+
+---
+
 ## Status
 
-> **Phase 2 — working...**
+> **Phase 3 — complete ✅**
