@@ -1,7 +1,5 @@
 # StackShop 🛒
 
-> A solid, reusable full-stack e-commerce foundation built with the TanStack ecosystem — built once, deployed many times.
-
 ---
 
 ## What is this?
@@ -9,41 +7,6 @@
 **StackShop** is a base project designed to serve as the foundation for any future e-commerce.
 
 ---
-
-## Tech Stack
-
-| Layer                | Tech            |
-| -------------------- | --------------- |
-| Framework            | TanStack Start  |
-| UI                   | React           |
-| Routing              | TanStack Router |
-| Data fetching        | TanStack Query  |
-| Compiler             | React Compiler  |
-| Linting / Formatting | Biome           |
-| Deployment           | Railway         |
-| Language             | TypeScript      |
-
----
-
-## Architecture Overview
-
-### Component Map
-
-```
-src/
-├── routes/
-│   ├── __root.tsx          ← Global shell (layout, fonts, scripts)
-│   ├── index.tsx           ← / Home — loader + featured grid
-│   └── products/
-│       ├── index.tsx       ← /products — createServerFn + full catalog
-│       └── $id.tsx         ← /products/$id — dynamic detail
-├── components/
-│   ├── Header.tsx          ← Top nav bar
-│   └── ui/
-│       └── ProductCard.tsx ← Reusable product card
-└── db/
-    └── seed.ts             ← Fake product catalog (8 items)
-```
 
 ---
 
@@ -405,18 +368,18 @@ This is a living document. Each step gets checked off as it's done.
   npm i -D drizzle-kit tsx
   ```
 
-  | Package      | Role                                             |
-  | ------------ | ------------------------------------------------ |
-  | `drizzle-orm`| The ORM — type-safe query builder                |
-  | `postgres`   | Native PostgreSQL driver (used by Drizzle)       |
-  | `pg`         | Node.js PostgreSQL driver (for the Pool client)  |
-  | `dotenv`     | Load `.env` vars before running scripts          |
-  | `drizzle-kit`| CLI for migrations, codegen, and Drizzle Studio  |
-  | `tsx`        | Run TypeScript files directly (used for seeding) |
-  | `@types/pg`  | Type definitions for the `pg` driver             |
+  | Package       | Role                                             |
+  | ------------- | ------------------------------------------------ |
+  | `drizzle-orm` | The ORM — type-safe query builder                |
+  | `postgres`    | Native PostgreSQL driver (used by Drizzle)       |
+  | `pg`          | Node.js PostgreSQL driver (for the Pool client)  |
+  | `dotenv`      | Load `.env` vars before running scripts          |
+  | `drizzle-kit` | CLI for migrations, codegen, and Drizzle Studio  |
+  | `tsx`         | Run TypeScript files directly (used for seeding) |
+  | `@types/pg`   | Type definitions for the `pg` driver             |
+  | `cross-env`   | Set env variables cross-platform (Win/Mac/Linux) |
 
 - [x] **Step 2 — Create a Supabase project** ☁️
-
   1. Go to [supabase.com](https://supabase.com) and create a new project
   2. Once created, navigate to **Project Settings → Database**
   3. Under **Connection string**, select **Session pooler** mode and copy the URI:
@@ -432,10 +395,8 @@ This is a living document. Each step gets checked off as it's done.
   Create a `.env` file at the project root and paste the connection string, replacing `[YOUR-PASSWORD]`:
 
   ```env
-  DATABASE_URL=postgresql://postgres.<project-ref>:your-password@aws-1-us-west-2.pooler.supabase.com:5432/postgres
+  DATABASE_URL="postgresql://postgres.fceondpyuqyitudbtnuw:<yourpassword>@aws-1-us-west-2.pooler.supabase.com:5432/postgres"
   ```
-
-  > Never commit `.env` — it's already in `.gitignore`.
 
 - [x] **Step 4 — Database client** `src/db/index.ts`
 
@@ -467,37 +428,60 @@ This is a living document. Each step gets checked off as it's done.
   Two tables: `products` (the catalog) and `cart_items` (shopping cart). Both use UUID primary keys and Drizzle enums for constrained string fields.
 
   ```ts
-  import { integer, numeric, pgEnum, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+  import {
+    integer,
+    numeric,
+    pgEnum,
+    pgTable,
+    text,
+    timestamp,
+    uuid,
+    varchar,
+  } from "drizzle-orm/pg-core";
 
-  export const badgeEnum     = pgEnum("badge",     ["New", "Sale", "Featured", "Limited"]);
-  export const inventoryEnum = pgEnum("inventory", ["in-stock", "backorder", "preorder"]);
+  export const badgeEnum = pgEnum("badge", [
+    "New",
+    "Sale",
+    "Featured",
+    "Limited",
+  ]);
+  export const inventoryEnum = pgEnum("inventory", [
+    "in-stock",
+    "backorder",
+    "preorder",
+  ]);
 
   export const products = pgTable("products", {
-    id:          uuid("id").primaryKey().defaultRandom(),
-    name:        varchar("name", { length: 256 }).notNull(),
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 256 }).notNull(),
     description: text("description").notNull(),
-    price:       numeric("price", { precision: 10, scale: 2 }).notNull(),
-    badge:       badgeEnum("badge"),
-    rating:      numeric("rating", { precision: 3, scale: 2 }).notNull().default("0"),
-    reviews:     integer("reviews").notNull().default(0),
-    image:       varchar("image", { length: 512 }).notNull(),
-    inventory:   inventoryEnum("inventory").notNull().default("in-stock"),
-    createdAt:   timestamp("created_at").defaultNow().notNull(),
+    price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+    badge: badgeEnum("badge"),
+    rating: numeric("rating", { precision: 3, scale: 2 })
+      .notNull()
+      .default("0"),
+    reviews: integer("reviews").notNull().default(0),
+    image: varchar("image", { length: 512 }).notNull(),
+    inventory: inventoryEnum("inventory").notNull().default("in-stock"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   });
 
   export const cartItems = pgTable("cart_items", {
-    id:        uuid("id").primaryKey().defaultRandom(),
-    productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-    quantity:  integer("quantity").notNull().default(1),
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    quantity: integer("quantity").notNull().default(1),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   });
 
   // Inferred types — use these everywhere instead of manual interfaces
-  export type ProductSelect   = typeof products.$inferSelect;
-  export type ProductInsert   = typeof products.$inferInsert;
-  export type CartItemSelect  = typeof cartItems.$inferSelect & typeof products.$inferSelect;
-  export type CartItemInsert  = typeof cartItems.$inferInsert;
+  export type ProductSelect = typeof products.$inferSelect;
+  export type ProductInsert = typeof products.$inferInsert;
+  export type CartItemSelect = typeof cartItems.$inferSelect &
+    typeof products.$inferSelect;
+  export type CartItemInsert = typeof cartItems.$inferInsert;
   ```
 
   `$inferSelect` and `$inferInsert` let Drizzle derive the TypeScript types directly from the schema — no duplication.
@@ -505,24 +489,24 @@ This is a living document. Each step gets checked off as it's done.
 - [x] **Step 6 — Drizzle config** `drizzle.config.ts`
 
   ```ts
-  import 'dotenv/config';
-  import { defineConfig } from 'drizzle-kit';
+  import "dotenv/config";
+  import { defineConfig } from "drizzle-kit";
 
   export default defineConfig({
-    out:     './drizzle',
-    schema:  './src/db/schema.ts',
-    dialect: 'postgresql',
+    out: "./drizzle",
+    schema: "./src/db/schema.ts",
+    dialect: "postgresql",
     dbCredentials: {
       url: process.env.DATABASE_URL!,
     },
   });
   ```
 
-  | Field       | Purpose                                           |
-  | ----------- | ------------------------------------------------- |
-  | `out`       | Where Drizzle writes migration SQL files          |
-  | `schema`    | Source of truth — your schema definition          |
-  | `dialect`   | Database engine (`postgresql`, `mysql`, `sqlite`) |
+  | Field     | Purpose                                           |
+  | --------- | ------------------------------------------------- |
+  | `out`     | Where Drizzle writes migration SQL files          |
+  | `schema`  | Source of truth — your schema definition          |
+  | `dialect` | Database engine (`postgresql`, `mysql`, `sqlite`) |
 
 - [x] **Step 7 — Add scripts to `package.json`** ⚙️
 
@@ -531,16 +515,18 @@ This is a living document. Each step gets checked off as it's done.
     "db:generate": "drizzle-kit generate",
     "db:migrate":  "drizzle-kit migrate",
     "db:push":     "drizzle-kit push",
-    "db:studio":   "drizzle-kit studio"
+    "db:studio":   "drizzle-kit studio",
+    "db:seed":     "cross-env NODE_ENV=production NITRO_PRESET=node-server tsx src/db/seedDb.ts"
   }
   ```
 
-  | Script         | What it does                                              |
-  | -------------- | --------------------------------------------------------- |
-  | `db:generate`  | Reads the schema and generates SQL migration files        |
-  | `db:migrate`   | Applies pending migration files to the database           |
-  | `db:push`      | Pushes the schema directly — no migration files generated |
-  | `db:studio`    | Opens Drizzle Studio (visual DB browser)                  |
+  | Script        | What it does                                              |
+  | ------------- | --------------------------------------------------------- |
+  | `db:generate` | Reads the schema and generates SQL migration files        |
+  | `db:migrate`  | Applies pending migration files to the database           |
+  | `db:push`     | Pushes the schema directly — no migration files generated |
+  | `db:studio`   | Opens Drizzle Studio (visual DB browser)                  |
+  | `db:seed`     | Populates the database with sample products               |
 
   > In production use `generate` + `migrate` for a proper migration history. `push` is fast for prototyping — it diffs and applies directly.
 
@@ -562,10 +548,33 @@ This is a living document. Each step gets checked off as it's done.
 
 - [x] **Step 9 — Seed the database** 🌱
 
-  `src/db/seedDb.ts` inserts 8 sample products. It checks for existing rows before inserting — pass `--reset` to wipe and reseed:
+  `src/db/seedDb.ts` inserts 8 sample products. It checks for existing rows before inserting — pass `--reset` to wipe and reseed.
+
+  **Why not just run `tsx src/db/seedDb.ts` directly?**
+
+  TanStack Start uses **Nitro** as its internal server engine. When you import the DB client (`src/db/index.ts`) inside a standalone script, Nitro detects the environment and tries to boot its full server runtime — which fails outside of the framework's normal startup process.
+
+  The fix is to set two environment variables before the script runs:
+
+  | Variable              | Value           | Effect                                                     |
+  | --------------------- | --------------- | ---------------------------------------------------------- |
+  | `NODE_ENV`            | `production`    | Disables dev-mode behavior (HMR, Vite watchers, etc.)      |
+  | `NITRO_PRESET`        | `node-server`   | Tells Nitro to use the plain Node.js adapter — no full boot |
+
+  These are set at the very top of `seedDb.ts` as well, as a safety net:
+
+  ```ts
+  // Prevent Nitro/vite from initializing when running as a standalone script
+  process.env.NITRO_PRESET = "node-server";
+  process.env.NODE_ENV = process.env.NODE_ENV || "production";
+  ```
+
+  **`cross-env`** is also needed because the `VAR=value command` syntax for setting env vars only works on Mac/Linux. On Windows it fails silently. `cross-env` makes it work everywhere with the same syntax.
+
+  Run the seed:
 
   ```bash
-  npx tsx src/db/seedDb.ts
+  npm run db:seed
   ```
 
   Output:
@@ -579,7 +588,7 @@ This is a living document. Each step gets checked off as it's done.
   Run with reset flag to clear and repopulate:
 
   ```bash
-  npx tsx src/db/seedDb.ts --reset
+  npm run db:seed -- --reset
   ```
 
 ---

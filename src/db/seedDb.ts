@@ -1,3 +1,8 @@
+// Prevent Nitro/vite from initializing when running as a standalone script
+process.env.NITRO_PRESET = "node-server";
+process.env.NODE_ENV = process.env.NODE_ENV || "production";
+
+// Load environment variables FIRST
 import dotenv from "dotenv";
 import type { ProductInsert } from "./schema";
 
