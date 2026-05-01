@@ -4,7 +4,7 @@ process.env.NODE_ENV = process.env.NODE_ENV || "production";
 
 // Load environment variables FIRST
 import dotenv from "dotenv";
-import type { ProductInsert } from "./schema";
+import type { ProductInsert } from "@/db/schema";
 
 dotenv.config();
 
@@ -97,8 +97,8 @@ const sampleProducts: ProductInsert[] = [
 async function seed() {
 	try {
 		// Dynamically import database modules after environment variables are loaded
-		const { db } = await import("./index");
-		const { products } = await import("./schema");
+		const { db } = await import("@/db/index");
+		const { products } = await import("@/db/schema");
 
 		console.log("🌱 Starting database seed...");
 
@@ -133,4 +133,12 @@ async function seed() {
 	}
 }
 
-seed();
+// Only run seed() if this file is executed directly (not imported)
+// This script should only run when executed via npm run db:seed
+// It should NOT run when imported by other modules (like Vite during dev)
+const isRunningAsScript =
+  process.argv[1]?.includes('seed.ts') || process.argv[1]?.includes('tsx')
+
+if (isRunningAsScript) {
+  seed()
+}

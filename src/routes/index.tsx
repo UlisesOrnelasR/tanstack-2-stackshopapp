@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { ArrowRightIcon } from "lucide-react";
 import {
 	Card,
@@ -7,18 +8,23 @@ import {
 	CardTitle,
 } from "#/components/ui/card";
 import { ProductCard } from "#/components/ui/ProductCard";
-import { sampleProducts } from "#/db/seed";
+import { getRecommendedProducts } from "@/data/products";
 
-export const Route = createFileRoute("/")({
-	loader: async () => {
-		return { products: sampleProducts.slice(0, 3) };
-	},
-	component: App,
+const fetchProductsFn = createServerFn({ method: "GET" }).handler(async () => {
+	const products = await getRecommendedProducts();
+	return products;
 });
 
-function App() {
-	const { products } = Route.useLoaderData();
+export const Route = createFileRoute("/")({
+	component: App,
+	loader: async () => {
+		// This runs on server during SSR AND on client during navigation
+		return fetchProductsFn();
+	},
+});
 
+async function App() {
+	const products = Route.useLoaderData();
 	return (
 		<div className="space-y-12 bg-linear-to-b from-slate-50 via-white to-slate-50 p-6">
 			<section>

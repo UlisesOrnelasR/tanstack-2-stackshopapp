@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ShoppingBagIcon } from "lucide-react";
+import type { ProductSelect } from "#/db/schema";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
 import {
@@ -17,24 +18,11 @@ const inventoryTone = {
 	preorder: "bg-indigo-50 text-indigo-700 border-indigo-100",
 };
 
-export function ProductCard({
-	product,
-}: {
-	product: {
-		name: string;
-		description: string;
-		price: string;
-		badge?: string;
-		rating: string;
-		reviews: number;
-		image: string;
-		inventory: string;
-	};
-}) {
+export function ProductCard({ product }: { product: ProductSelect }) {
 	return (
 		<Link
 			to="/products/$id"
-			params={{ id: "1" }}
+			params={{ id: product.id }}
 			className="cursor-pointer h-full hover:-translate-y-1
      hover:shadow-lg transition"
 		>
