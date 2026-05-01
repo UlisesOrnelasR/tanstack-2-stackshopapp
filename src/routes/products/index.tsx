@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { createMiddleware, createServerFn } from "@tanstack/react-start";
+import { createMiddleware } from "@tanstack/react-start";
 import { ProductCard } from "#/components/ui/ProductCard";
 import { getAllProducts } from "#/data/products";
 import {
@@ -22,17 +22,10 @@ const loggerMiddleware = createMiddleware().server(
 	},
 );
 
-const fetchProducts = createServerFn({ method: "GET" }).handler(async () => {
-	// Map products to ensure all fields match ProductCard expectations
-	const { getAllProducts } = await import("@/data/products");
-	const data = await getAllProducts();
-
-	return data;
-});
 export const Route = createFileRoute("/products/")({
 	loader: async () => {
 		console.log("---loader--");
-		return fetchProducts();
+		return getAllProducts();
 	},
 
 	component: RouteComponent,
@@ -59,7 +52,7 @@ function RouteComponent() {
 	const products = Route.useLoaderData();
 	const { data } = useQuery({
 		queryKey: ["products"],
-		queryFn: () => fetchProducts(),
+		queryFn: () => getAllProducts(),
 		initialData: products,
 	});
 

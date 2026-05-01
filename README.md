@@ -593,6 +593,130 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+### Phase 4 — Real Data Layer
+
+- [x] **Step 1 — Install Zod** 📦
+
+  ```bash
+  npm install zod
+  ```
+
+  Zod is a TypeScript-first schema validation library. It validates data at **runtime** — something TypeScript alone can't do (types disappear after compile). We use it here to validate the `id` received by `getProductById` before it reaches the database.
+
+- [x] **Step 2 — Create `src/data/products.ts`** 🗄️
+
+  Instead of writing `createServerFn` directly inside each route file, all server functions live in a dedicated data layer:
+
+  ```
+  src/
+  └── data/
+      └── products.ts    ← all server functions for the products domain
+  ```
+
+  This file exports three functions:
+
+  ```ts
+  import { createServerFn } from "@tanstack/react-start";
+  import { eq } from "drizzle-orm";
+  import { z } from "zod";
+  import { db } from "@/db";
+  import { products } from "@/db/schema";
+
+  // Fetches every product — used in /products
+  export const getAllProducts = createServerFn({ method: "GET" }).handler(
+    async () => {
+      const allProducts = await db.select().from(products);
+      return allProducts;
+    },
+  );
+
+  // Fetches the first 3 — used on the home page
+  export const getRecommendedProducts = createServerFn({ method: "GET" }).handler(
+    async () => {
+      const recommendedProducts = await db.select().from(products).limit(3);
+      return recommendedProducts;
+    },
+  );
+
+  // Fetches a single product by id — used in /products/$id
+  const idSchema = z.string();
+
+  export const getProductById = createServerFn({ method: "GET" })
+    .inputValidator((id: string) => id)
+    .handler(async ({ data }) => {
+      const id = idSchema.parse(data); // runtime validation with Zod
+      const product = await db
+        .select()
+        .from(products)
+        .where(eq(products.id, id))
+        .limit(1);
+      return product[0] ?? null;
+    });
+  ```
+
+  **Why server functions live in `data/` and not inside the route files**
+
+  `createServerFn` creates an HTTP endpoint that runs exclusively on the server. The function can be called from anywhere — a loader, a form action, another server function. If you write it inline in a route file, it's trapped there. Moving it to `data/products.ts` means:
+
+  - `getRecommendedProducts` can be called from the home loader
+  - `getAllProducts` can be called from the products loader AND from a `useQuery` on the client
+  - `getProductById` can be called from the detail page loader
+
+  Routes handle routing and rendering. The data layer handles data access. That separation is what makes the code reusable and easy to test.
+
+  | Function                | Called from                         | Returns         |
+  | ----------------------- | ----------------------------------- | --------------- |
+  | `getAllProducts`         | `/products` loader + `useQuery`     | All products    |
+  | `getRecommendedProducts`| `/` loader                          | First 3 products|
+  | `getProductById`        | `/products/$id` loader              | Single product or `null` |
+
+- [x] **Step 3 — Wire routes to the data layer** 🔌
+
+  Each route now just imports and calls the right function. No data logic in the route:
+
+  **`src/routes/index.tsx`** — home page:
+  ```ts
+  import { getRecommendedProducts } from "@/data/products";
+
+  export const Route = createFileRoute("/")({
+    loader: async () => getRecommendedProducts(),
+    component: App,
+  });
+  ```
+
+  **`src/routes/products/index.tsx`** — catalog:
+  ```ts
+  import { getAllProducts } from "#/data/products";
+
+  export const Route = createFileRoute("/products/")({
+    loader: async () => getAllProducts(),
+    component: RouteComponent,
+  });
+
+  function RouteComponent() {
+    const products = Route.useLoaderData();
+    const { data } = useQuery({
+      queryKey: ["products"],
+      queryFn: () => getAllProducts(), // client-side cache
+      initialData: products,
+    });
+  }
+  ```
+
+  **`src/routes/products/$id.tsx`** — product detail:
+  ```ts
+  import { getProductById } from "#/data/products";
+
+  export const Route = createFileRoute("/products/$id")({
+    loader: async ({ params }) => getProductById({ data: params.id }),
+    component: RouteComponent,
+  });
+  ```
+
+  The `params.id` from the URL is passed as `data` — which is the input that `.inputValidator()` receives, and Zod validates before the handler runs.
+
+---
+
 ## Status
 
-> **Phase 3 — complete ✅**
+> **Phase 4 — complete ✅**

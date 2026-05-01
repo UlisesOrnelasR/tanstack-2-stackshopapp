@@ -4,7 +4,7 @@ import { getProductById } from "#/data/products";
 export const Route = createFileRoute("/products/$id")({
 	component: RouteComponent,
 	loader: async ({ params }) => {
-		return await getProductById(params.id);
+		return getProductById({ data: params.id });
 	},
 });
 
@@ -14,7 +14,7 @@ function RouteComponent() {
 
 	return (
 		<div>
-			Hello "/products/$id"!{id}
+			Hello "/products/$id"! {id}
 			<hr />
 			{JSON.stringify(product)}
 		</div>
