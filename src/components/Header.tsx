@@ -6,7 +6,7 @@ export default function Header() {
 		<header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
 			<div className="mx-auto max-w-6xl px-4 py-3 items-center justify-between flex">
 				<div className="flex items-center gap-3">
-					<Link to="/cart" className="flex items-center gap-2">
+					<Link to="/" className="flex items-center gap-2">
 						<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-800">
 							<ShoppingBag size={20} />
 						</div>
