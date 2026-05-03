@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ShoppingBagIcon } from "lucide-react";
 import type { ProductSelect } from "#/db/schema";
 import { cn } from "@/lib/utils";
-import { Button } from "./button";
+import { Button } from "./ui/button";
 import {
 	Card,
 	CardContent,
@@ -10,7 +10,7 @@ import {
 	CardFooter,
 	CardHeader,
 	CardTitle,
-} from "./card";
+} from "./ui/card";
 
 const inventoryTone = {
 	"in-stock": "bg-emerald-50 text-emerald-600 border-emerald-100",

@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRightIcon } from "lucide-react";
+import { ProductCard } from "#/components/ProductCard";
 import {
 	Card,
 	CardDescription,
 	CardHeader,
 	CardTitle,
 } from "#/components/ui/card";
-import { ProductCard } from "#/components/ui/ProductCard";
 import { getRecommendedProducts } from "@/data/products";
 
 export const Route = createFileRoute("/")({

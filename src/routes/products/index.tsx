@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { createMiddleware } from "@tanstack/react-start";
-import { ProductCard } from "#/components/ui/ProductCard";
+import { ProductCard } from "#/components/ProductCard";
 import { getAllProducts } from "#/data/products";
 import {
 	Card,
