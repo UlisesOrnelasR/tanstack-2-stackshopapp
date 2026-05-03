@@ -1,5 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowLeftIcon, ShoppingBagIcon, SparklesIcon } from "lucide-react";
+import { Suspense } from "react";
+import { RecommendedProducts } from "#/components/RecommndedProducts";
 import { Button } from "#/components/ui/button";
 import {
 	Card,
@@ -9,31 +11,34 @@ import {
 	CardHeader,
 	CardTitle,
 } from "#/components/ui/card";
-import { getProductById } from "#/data/products";
+import { Skeleton } from "#/components/ui/skeleton";
+import { getProductById, getRecommendedProducts } from "#/data/products";
 
 export const Route = createFileRoute("/products/$id")({
 	component: RouteComponent,
 	loader: async ({ params }) => {
+		//Product detail
 		const product = await getProductById({ data: params.id });
-
 		if (!product) {
 			throw notFound();
 		}
-
-		return product;
+		//Recommended products
+		const recommendedProducts = getRecommendedProducts();
+		return {
+			product,
+			recommendedProducts,
+		};
 	},
-	head: ({ loaderData: product }) => {
-		if (!product) {
+	head: ({ loaderData }) => {
+		if (!loaderData) {
 			return {};
 		}
+
+		const { product } = loaderData;
+
 		return {
 			meta: [
-				{
-					title: product?.name,
-				},
-				{
-					description: product?.description,
-				},
+				{ title: product.name },
 				{ name: "description", content: product.description },
 				{ name: "image", content: product.image },
 				{ name: "title", content: product.name },
@@ -41,9 +46,8 @@ export const Route = createFileRoute("/products/$id")({
 					name: "canonical",
 					content:
 						process.env.NODE_ENV === "production"
-							? `https://stackshop-prod.appwrite.network/products/${product?.id}`
-							: `http://localhost:3000/products/${product?.id}` ||
-								`localhost:3000/products/${product?.id}`,
+							? `https://stackshop-prod.appwrite.network/products/${product.id}`
+							: `http://localhost:3000/products/${product.id}`,
 				},
 			],
 		};
@@ -51,7 +55,7 @@ export const Route = createFileRoute("/products/$id")({
 });
 
 function RouteComponent() {
-	const product = Route.useLoaderData();
+	const { product, recommendedProducts } = Route.useLoaderData();
 	console.log(product);
 
 	return (
@@ -132,6 +136,42 @@ function RouteComponent() {
 					</div>
 				</Card>
 			</Card>
+			<div className="mb-6">
+				<Suspense
+					fallback={
+						<div>
+							<h2 className="my-4 text-2xl font-bold">Recommended Products</h2>
+
+							<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+								{Array.from({ length: 3 }).map((_, index) => (
+									<Card key={index}>
+										<CardHeader>
+											<Skeleton className="aspect-4/3 w-full rounded-xl" />
+										</CardHeader>
+
+										<CardContent className="space-y-3">
+											<Skeleton className="h-5 w-3/4" />
+											<Skeleton className="h-4 w-full" />
+											<Skeleton className="h-4 w-2/3" />
+
+											<div className="flex items-center justify-between pt-2">
+												<Skeleton className="h-6 w-20" />
+												<Skeleton className="h-4 w-24" />
+											</div>
+										</CardContent>
+
+										<CardFooter>
+											<Skeleton className="h-10 w-full rounded-md" />
+										</CardFooter>
+									</Card>
+								))}
+							</div>
+						</div>
+					}
+				>
+					<RecommendedProducts recommendedProducts={recommendedProducts} />
+				</Suspense>
+			</div>
 		</div>
 	);
 }

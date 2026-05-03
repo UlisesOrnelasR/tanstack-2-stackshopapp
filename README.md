@@ -793,6 +793,126 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+### Phase 5 — Streaming UI & Loading States
+
+- [x] **Step 1 — Suspense + `use` for streamed recommended products** ⚡
+
+  Added skeleton loading states to the product detail page using React 19's `use` hook, `<Suspense>`, and the shadcn/ui `Skeleton` component.
+
+  Add the skeleton component:
+
+  ```bash
+  npx shadcn@latest add skeleton
+  ```
+
+  This generates `src/components/ui/skeleton.tsx` — a simple animated pulse div that composes via `className`:
+
+  ```ts
+  function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
+    return (
+      <div
+        data-slot="skeleton"
+        className={cn("animate-pulse rounded-md bg-muted", className)}
+        {...props}
+      />
+    );
+  }
+  ```
+
+  ***
+
+  **The key pattern — return a Promise, don't await it**
+
+  In the `/products/$id` loader, the product detail is `await`ed (it must be ready before the page renders), but the recommended products are returned as an **unresolved Promise**:
+
+  ```ts
+  loader: async ({ params }) => {
+    // awaited — page can't render without this
+    const product = await getProductById({ data: params.id });
+    if (!product) throw notFound();
+
+    // NOT awaited — returned as a live Promise
+    const recommendedProducts = getRecommendedProducts();
+
+    return { product, recommendedProducts };
+  },
+  ```
+
+  The component receives `recommendedProducts` as a `Promise<ProductSelect[]>`. The product detail section renders immediately with real data. The recommendations section renders a skeleton until the promise resolves.
+
+  ***
+
+  **`use()` unwraps the Promise inside the component**
+
+  React 19's `use` hook reads a Promise and suspends the component until it resolves. It can only be called inside a component wrapped in `<Suspense>`:
+
+  ```ts
+  // src/components/RecommndedProducts.tsx
+
+  import { use } from "react";
+
+  export function RecommendedProducts({
+    recommendedProducts,
+  }: {
+    recommendedProducts: Promise<ProductSelect[]>;
+  }) {
+    const recommendedProductsData = use(recommendedProducts);
+    // ...render the grid
+  }
+  ```
+
+  `use` is NOT a regular hook — it can be called conditionally and inside loops. Its job is specifically to unwrap thenables (Promises) and context values.
+
+  ***
+
+  **`<Suspense>` with a skeleton fallback**
+
+  The `fallback` renders while the Promise is pending. Once `use()` resolves, React swaps in the real component:
+
+  ```tsx
+  <Suspense
+    fallback={
+      <div>
+        <h2 className="my-4 text-2xl font-bold">Recommended Products</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Card key={index}>
+              <CardHeader>
+                <Skeleton className="aspect-4/3 w-full rounded-xl" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-5 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-2/3" />
+                <div className="flex items-center justify-between pt-2">
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Skeleton className="h-10 w-full rounded-md" />
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      </div>
+    }
+  >
+    <RecommendedProducts recommendedProducts={recommendedProducts} />
+  </Suspense>
+  ```
+
+  | Piece | Role |
+  | --- | --- |
+  | `getRecommendedProducts()` (no `await`) | Returns a live Promise to the component |
+  | `use(promise)` | Suspends the component until the Promise resolves |
+  | `<Suspense fallback={...}>` | Renders the skeleton while suspended |
+  | `<Skeleton>` | Animated pulse placeholder matching the real card shape |
+
+  The result: the product detail is visible immediately, and the recommended section fades in once the data arrives — no spinner, no layout shift.
+
+---
+
 ## Status
 
-> **Phase 4 — complete ✅**
+> **Phase 5 — complete ✅**

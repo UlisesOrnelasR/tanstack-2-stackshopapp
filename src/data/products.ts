@@ -19,6 +19,7 @@ export const getAllProducts = createServerFn({ method: "GET" }).handler(
 export const getRecommendedProducts = createServerFn({ method: "GET" }).handler(
 	async () => {
 		try {
+			// await new Promise((resolve) => setTimeout(resolve, 2000)); this was just to show how Suspense and use works
 			const recommendedProducts = await db.select().from(products).limit(3);
 			return recommendedProducts;
 		} catch (error) {
