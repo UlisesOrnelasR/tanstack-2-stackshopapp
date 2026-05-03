@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowLeftIcon, ShoppingBagIcon, SparklesIcon } from "lucide-react";
 import { Button } from "#/components/ui/button";
 import {
@@ -14,7 +14,39 @@ import { getProductById } from "#/data/products";
 export const Route = createFileRoute("/products/$id")({
 	component: RouteComponent,
 	loader: async ({ params }) => {
-		return getProductById({ data: params.id });
+		const product = await getProductById({ data: params.id });
+
+		if (!product) {
+			throw notFound();
+		}
+
+		return product;
+	},
+	head: ({ loaderData: product }) => {
+		if (!product) {
+			return {};
+		}
+		return {
+			meta: [
+				{
+					title: product?.name,
+				},
+				{
+					description: product?.description,
+				},
+				{ name: "description", content: product.description },
+				{ name: "image", content: product.image },
+				{ name: "title", content: product.name },
+				{
+					name: "canonical",
+					content:
+						process.env.NODE_ENV === "production"
+							? `https://stackshop-prod.appwrite.network/products/${product?.id}`
+							: `http://localhost:3000/products/${product?.id}` ||
+								`localhost:3000/products/${product?.id}`,
+				},
+			],
+		};
 	},
 });
 

@@ -768,6 +768,29 @@ This is a living document. Each step gets checked off as it's done.
 
   The `?.` optional chaining is needed because `getProductById` returns `Product | null` — if no row matches the `id`, `null` propagates safely instead of crashing.
 
+- [x] **Step 5 — Dynamic metadata on the product detail page** 🏷️
+
+  Added the `head()` function to the `/products/$id` route so each product page gets its own SEO metadata — title, description, image, and canonical URL — all derived from the loader data.
+
+  ```ts
+  export const Route = createFileRoute("/products/$id")({
+    loader: async ({ params }) => getProductById({ data: params.id }),
+    head: ({ loaderData: product }) => {
+      if (!product) return {};
+      return {
+        meta: [
+          { title: product.name },
+          { name: "description", content: product.description },
+          { name: "image",       content: product.image },
+          { name: "canonical",   content: `https://stackshop-prod.appwrite.network/products/${product.id}` },
+        ],
+      };
+    },
+  });
+  ```
+
+  `head()` runs on the server alongside the loader — `loaderData` is already resolved by the time it executes, so no extra fetch is needed. The canonical URL switches between production and `localhost` based on `NODE_ENV`.
+
 ---
 
 ## Status
