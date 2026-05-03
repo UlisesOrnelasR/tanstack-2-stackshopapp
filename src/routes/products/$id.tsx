@@ -19,7 +19,6 @@ export const Route = createFileRoute("/products/$id")({
 });
 
 function RouteComponent() {
-	const { id } = Route.useParams();
 	const product = Route.useLoaderData();
 	console.log(product);
 

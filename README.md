@@ -556,10 +556,10 @@ This is a living document. Each step gets checked off as it's done.
 
   The fix is to set two environment variables before the script runs:
 
-  | Variable              | Value           | Effect                                                     |
-  | --------------------- | --------------- | ---------------------------------------------------------- |
-  | `NODE_ENV`            | `production`    | Disables dev-mode behavior (HMR, Vite watchers, etc.)      |
-  | `NITRO_PRESET`        | `node-server`   | Tells Nitro to use the plain Node.js adapter — no full boot |
+  | Variable       | Value         | Effect                                                      |
+  | -------------- | ------------- | ----------------------------------------------------------- |
+  | `NODE_ENV`     | `production`  | Disables dev-mode behavior (HMR, Vite watchers, etc.)       |
+  | `NITRO_PRESET` | `node-server` | Tells Nitro to use the plain Node.js adapter — no full boot |
 
   These are set at the very top of `seedDb.ts` as well, as a safety net:
 
@@ -631,12 +631,12 @@ This is a living document. Each step gets checked off as it's done.
   );
 
   // Fetches the first 3 — used on the home page
-  export const getRecommendedProducts = createServerFn({ method: "GET" }).handler(
-    async () => {
-      const recommendedProducts = await db.select().from(products).limit(3);
-      return recommendedProducts;
-    },
-  );
+  export const getRecommendedProducts = createServerFn({
+    method: "GET",
+  }).handler(async () => {
+    const recommendedProducts = await db.select().from(products).limit(3);
+    return recommendedProducts;
+  });
 
   // Fetches a single product by id — used in /products/$id
   const idSchema = z.string();
@@ -657,24 +657,24 @@ This is a living document. Each step gets checked off as it's done.
   **Why server functions live in `data/` and not inside the route files**
 
   `createServerFn` creates an HTTP endpoint that runs exclusively on the server. The function can be called from anywhere — a loader, a form action, another server function. If you write it inline in a route file, it's trapped there. Moving it to `data/products.ts` means:
-
   - `getRecommendedProducts` can be called from the home loader
   - `getAllProducts` can be called from the products loader AND from a `useQuery` on the client
   - `getProductById` can be called from the detail page loader
 
   Routes handle routing and rendering. The data layer handles data access. That separation is what makes the code reusable and easy to test.
 
-  | Function                | Called from                         | Returns         |
-  | ----------------------- | ----------------------------------- | --------------- |
-  | `getAllProducts`         | `/products` loader + `useQuery`     | All products    |
-  | `getRecommendedProducts`| `/` loader                          | First 3 products|
-  | `getProductById`        | `/products/$id` loader              | Single product or `null` |
+  | Function                 | Called from                     | Returns                  |
+  | ------------------------ | ------------------------------- | ------------------------ |
+  | `getAllProducts`         | `/products` loader + `useQuery` | All products             |
+  | `getRecommendedProducts` | `/` loader                      | First 3 products         |
+  | `getProductById`         | `/products/$id` loader          | Single product or `null` |
 
 - [x] **Step 3 — Wire routes to the data layer** 🔌
 
   Each route now just imports and calls the right function. No data logic in the route:
 
   **`src/routes/index.tsx`** — home page:
+
   ```ts
   import { getRecommendedProducts } from "@/data/products";
 
@@ -685,6 +685,7 @@ This is a living document. Each step gets checked off as it's done.
   ```
 
   **`src/routes/products/index.tsx`** — catalog:
+
   ```ts
   import { getAllProducts } from "#/data/products";
 
@@ -704,6 +705,7 @@ This is a living document. Each step gets checked off as it's done.
   ```
 
   **`src/routes/products/$id.tsx`** — product detail:
+
   ```ts
   import { getProductById } from "#/data/products";
 
@@ -714,6 +716,57 @@ This is a living document. Each step gets checked off as it's done.
   ```
 
   The `params.id` from the URL is passed as `data` — which is the input that `.inputValidator()` receives, and Zod validates before the handler runs.
+
+- [x] **Step 4 — Product detail page** 🖼️
+
+  Built the `/products/$id` route — the full product detail view consuming real data from the database.
+
+  ```
+  src/
+  └── routes/
+      └── products/
+          └── $id.tsx    ← dynamic detail route
+  ```
+
+  The loader fetches the product by URL param and passes it to the component:
+
+  ```ts
+  export const Route = createFileRoute("/products/$id")({
+    loader: async ({ params }) => getProductById({ data: params.id }),
+    component: RouteComponent,
+  });
+  ```
+
+  The component reads the loader result with `useLoaderData()` — no hooks, no client fetch, just typed data:
+
+  ```ts
+  function RouteComponent() {
+    const product = Route.useLoaderData();
+    // product is fully typed as ProductSelect | null (inferred from schema)
+  }
+  ```
+
+  **How data flows from the DB to the template**
+
+  The type comes from Drizzle's `$inferSelect` defined in `src/db/schema.ts`. You never write a manual interface — the schema IS the type:
+
+  ```ts
+  // src/db/schema.ts
+  export type ProductSelect = typeof products.$inferSelect;
+  // { id: string, name: string, price: string, badge: "New" | "Sale" | ... | null, ... }
+  ```
+
+  From there, mapping to the template is direct property access:
+
+  | DB column           | Template usage                           | Notes                                       |
+  | ------------------- | ---------------------------------------- | ------------------------------------------- |
+  | `product.name`      | `<h1>{product?.name}</h1>`               | Optional chaining until null-check          |
+  | `product.price`     | `<span>${product?.price}</span>`         | Stored as `numeric` → arrives as `string`   |
+  | `product.badge`     | `{product?.badge && <span>{...}</span>}` | `null` collapses the badge pill             |
+  | `product.inventory` | Ternary to resolve shipping text         | Enum: `in-stock` · `backorder` · `preorder` |
+  | `product.image`     | `<img src={product?.image} />`           | URL string stored in DB                     |
+
+  The `?.` optional chaining is needed because `getProductById` returns `Product | null` — if no row matches the `id`, `null` propagates safely instead of crashing.
 
 ---
 
