@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { type ProductInsert, type ProductSelect, products } from "@/db/schema";
+import { type ProductSelect, products } from "@/db/schema";
 
 export const getAllProducts = createServerFn({ method: "GET" }).handler(
 	async () => {
@@ -46,22 +46,35 @@ export const getProductById = createServerFn({ method: "GET" })
 		return product[0] ?? null;
 	});
 
-export async function createProduct(
-	data: ProductInsert,
-): Promise<ProductSelect> {
-	const { db } = await import("@/db");
-	try {
-		const result = await db.insert(products).values(data).returning();
+export const productSchema = z.object({
+	name: z.string().min(1, "Name is required"),
+	description: z.string().min(1, "Description is required"),
+	price: z
+		.string()
+		.refine((val) => !isNaN(Number(val)), "Price must be a number"),
+	badge: z.enum(["New", "Sale", "Featured", "Limited"]).nullable().optional(),
+	image: z
+		.string()
+		.url("Image must be a valid URL")
+		.max(512, "Image must be 512 chars or less"),
+	inventory: z.enum(["in-stock", "backorder", "preorder"]),
+});
+
+export const createProduct = createServerFn({ method: "POST" })
+	.inputValidator((data: z.infer<typeof productSchema>) =>
+		productSchema.parse(data),
+	)
+	.handler(async ({ data }): Promise<ProductSelect> => {
+		const { db } = await import("@/db");
+		const result = await db
+			.insert(products)
+			.values({ ...data, badge: data.badge ?? null })
+			.returning();
 		const product = result[0];
 		if (!product) {
 			throw new Error(
 				"Failed to create product: no product returned from database",
 			);
 		}
-
 		return product;
-	} catch (error) {
-		console.error("Error creating product", error);
-		throw error;
-	}
-}
+	});

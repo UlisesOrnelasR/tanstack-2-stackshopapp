@@ -4,9 +4,8 @@ import {
 	useNavigate,
 	useRouter,
 } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
-import { FieldError } from "#/components/ui/field";
+import { useState } from "react";
+import type { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -25,106 +24,81 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-	type BadgeValue,
-	type InventoryValue,
-	type ProductInsert,
-	type ProductSelect,
-} from "@/db/schema";
+import { createProduct, productSchema } from "@/data/products";
+import type { BadgeValue, InventoryValue } from "@/db/schema";
 
 export const Route = createFileRoute("/products/create-product")({
 	component: RouteComponent,
 });
 
-const productSchema = z.object({
-	name: z.string().min(1, "Name is required"),
-	description: z.string().min(1, "Description is required"),
-	price: z
-		.string()
-		.refine((val) => !isNaN(Number(val)), "Price must be a number"),
-	badge: z.union([
-		z.enum(["New", "Sale", "Featured", "Limited"]),
-		z.undefined(),
-	]),
-	rating: z.number().min(0, "Rating is required"),
-	reviews: z.number().min(0, "Reviews is required"),
-	image: z
-		.string()
-		.url("Image must be a valid URL")
-		.max(512, "Image must be 512 chars or less"),
-	inventory: z.enum(["in-stock", "backorder", "preorder"]),
-});
+function fieldValidator(schema: z.ZodTypeAny) {
+	return ({ value }: { value: unknown }) => {
+		const result = schema.safeParse(value);
+		return result.success ? undefined : result.error.issues[0]?.message;
+	};
+}
 
-type CreateProductData = {
-	name: string;
-	description: string;
-	price: string;
-	image: string;
-	badge?: "New" | "Sale" | "Featured" | "Limited";
-	inventory: "in-stock" | "backorder" | "preorder";
-};
+function FieldMessage({ error }: { error?: string }) {
+	if (!error) return null;
+	return <p className="text-sm text-destructive">{error}</p>;
+}
 
-const createProductServerFn = createServerFn({ method: "POST" })
-	.inputValidator((data: CreateProductData) => data)
-	.handler(async ({ data }): Promise<ProductSelect> => {
-		//
-		const { createProduct } = await import("@/data/products");
-		const productData: ProductInsert = {
-			name: data.name,
-			description: data.description,
-			price: data.price,
-			image: data.image,
-			badge: data.badge ?? null,
-			inventory: data.inventory,
-		};
-		return createProduct(productData);
-	});
+function FormField({
+	field,
+	label,
+	children,
+}: {
+	field: any;
+	label: string;
+	children: React.ReactNode;
+}) {
+	const error = field.state.meta.isTouched
+		? (field.state.meta.errors[0] as string | undefined)
+		: undefined;
+
+	return (
+		<div className="space-y-2">
+			<Label htmlFor={field.name}>{label}</Label>
+			{children}
+			<FieldMessage error={error} />
+		</div>
+	);
+}
 
 function RouteComponent() {
 	const navigate = useNavigate();
 	const router = useRouter();
+	const [submitError, setSubmitError] = useState<string | null>(null);
 	const form = useForm({
 		defaultValues: {
 			name: "",
 			description: "",
 			price: "",
 			badge: undefined as BadgeValue | undefined,
-			rating: 0,
-			reviews: 0,
 			image: "",
 			inventory: "in-stock" as InventoryValue,
 		},
-		validators: {
-			onChange: ({ value }) => {
-				const result = productSchema.safeParse(value);
-				if (!result.success) {
-					return result.error.issues.map((issue) => issue.message).join(", ");
-				}
-				return undefined;
-			},
-		},
 		onSubmit: async ({ value }) => {
-			// TODO: Implement form submission
 			try {
-				await createProductServerFn({
+				setSubmitError(null);
+				await createProduct({
 					data: {
 						name: value.name,
 						description: value.description,
 						price: value.price,
-						image: value.image,
 						badge: value.badge,
+						image: value.image,
 						inventory: value.inventory,
 					},
 				});
-
 				await router.invalidate({ sync: true });
-
 				navigate({ to: "/products" });
-			} catch (error) {
-				console.error("Error creating product", error);
+			} catch {
+				setSubmitError("Something went wrong. Please try again.");
 			}
 		},
 	});
+
 	return (
 		<div className="mx-auto max-w-7xl py-8 px-4">
 			<div className="space-y-6">
@@ -146,10 +120,14 @@ function RouteComponent() {
 							}}
 							className="space-y-6"
 						>
-							<form.Field name="name">
+							<form.Field
+								name="name"
+								validators={{
+									onChange: fieldValidator(productSchema.shape.name),
+								}}
+							>
 								{(field) => (
-									<div className="space-y-2">
-										<Label htmlFor={field.name}>Product Name *</Label>
+									<FormField field={field} label="Product Name *">
 										<Input
 											type="text"
 											id={field.name}
@@ -157,34 +135,44 @@ function RouteComponent() {
 											value={field.state.value}
 											onChange={(e) => field.handleChange(e.target.value)}
 											placeholder="Enter product name"
-											aria-invalid={!field.state.meta.isValid}
+											aria-invalid={
+												field.state.meta.isTouched && !field.state.meta.isValid
+											}
 										/>
-										<FieldError errors={field.state.meta.errors} />
-									</div>
+									</FormField>
 								)}
 							</form.Field>
 
-							<form.Field name="description">
+							<form.Field
+								name="description"
+								validators={{
+									onChange: fieldValidator(productSchema.shape.description),
+								}}
+							>
 								{(field) => (
-									<div className="space-y-2">
-										<Label htmlFor={field.name}>Description</Label>
+									<FormField field={field} label="Description *">
 										<Textarea
 											id={field.name}
 											name={field.name}
 											value={field.state.value}
 											onChange={(e) => field.handleChange(e.target.value)}
 											placeholder="Enter product description"
-											aria-invalid={!field.state.meta.isValid}
+											aria-invalid={
+												field.state.meta.isTouched && !field.state.meta.isValid
+											}
 										/>
-										<FieldError errors={field.state.meta.errors} />
-									</div>
+									</FormField>
 								)}
 							</form.Field>
 
-							<form.Field name="price">
+							<form.Field
+								name="price"
+								validators={{
+									onChange: fieldValidator(productSchema.shape.price),
+								}}
+							>
 								{(field) => (
-									<div className="space-y-2">
-										<Label htmlFor={field.name}>Price</Label>
+									<FormField field={field} label="Price *">
 										<Input
 											type="number"
 											id={field.name}
@@ -192,78 +180,58 @@ function RouteComponent() {
 											value={field.state.value}
 											step="0.01"
 											onChange={(e) => field.handleChange(e.target.value)}
-											placeholder="0.0"
-											aria-invalid={!field.state.meta.isValid}
+											placeholder="0.00"
+											aria-invalid={
+												field.state.meta.isTouched && !field.state.meta.isValid
+											}
 										/>
-										<FieldError errors={field.state.meta.errors} />
-									</div>
+									</FormField>
 								)}
 							</form.Field>
 
-							<form.Field name="image">
+							<form.Field
+								name="image"
+								validators={{
+									onChange: fieldValidator(productSchema.shape.image),
+								}}
+							>
 								{(field) => (
-									<div className="space-y-2">
-										<Label htmlFor={field.name}>Image URL</Label>
+									<FormField field={field} label="Image URL *">
 										<Input
 											type="url"
 											id={field.name}
 											name={field.name}
 											value={field.state.value}
-											step="0.01"
 											onChange={(e) => field.handleChange(e.target.value)}
 											placeholder="https://example.com/image.jpg"
-											aria-invalid={!field.state.meta.isValid}
+											aria-invalid={
+												field.state.meta.isTouched && !field.state.meta.isValid
+											}
 										/>
-										<FieldError errors={field.state.meta.errors} />
-									</div>
+									</FormField>
 								)}
 							</form.Field>
 
-							{/* <form.Field name="badge">
+							<form.Field
+								name="badge"
+								validators={{
+									onChange: fieldValidator(productSchema.shape.badge),
+								}}
+							>
 								{(field) => (
-									<div className="space-y-2">
-										<Label htmlFor={field.name}>Badge (optional)</Label>
-										<Select
-											value={field.state.value ?? ""}
-											onValueChange={(value) =>
-												field.handleChange(
-													value === "" ? undefined : (value as BadgeValue),
-												)
-											}
-										>
-											<SelectTrigger id={field.name} className={"w-full"}>
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="">None</SelectItem>
-												<SelectItem value="New">New</SelectItem>
-												<SelectItem value="Sale">Sale</SelectItem>
-												<SelectItem value="Featured">Featured</SelectItem>
-												<SelectItem value="Limited">Limited</SelectItem>
-											</SelectContent>
-										</Select>
-										<FieldError errors={field.state.meta.errors} />
-									</div>
-								)}
-							</form.Field> */}
-							<form.Field name="badge">
-								{(field) => (
-									<div className="space-y-2">
-										<Label htmlFor={field.name}>Badge optional</Label>
-
+									<FormField field={field} label="Badge (optional)">
 										<Select
 											name={field.name}
 											value={field.state.value ?? "none"}
-											onValueChange={(value) => {
+											onValueChange={(value) =>
 												field.handleChange(
 													value === "none" ? undefined : (value as BadgeValue),
-												);
-											}}
+												)
+											}
 										>
 											<SelectTrigger className="w-full">
 												<SelectValue placeholder="Select badge" />
 											</SelectTrigger>
-
 											<SelectContent>
 												<SelectItem value="none">None</SelectItem>
 												<SelectItem value="New">New</SelectItem>
@@ -272,20 +240,25 @@ function RouteComponent() {
 												<SelectItem value="Limited">Limited</SelectItem>
 											</SelectContent>
 										</Select>
-									</div>
+									</FormField>
 								)}
 							</form.Field>
-							<form.Field name="inventory">
+
+							<form.Field
+								name="inventory"
+								validators={{
+									onChange: fieldValidator(productSchema.shape.inventory),
+								}}
+							>
 								{(field) => (
-									<div className="space-y-2">
-										<Label htmlFor={field.name}>Inventory Status</Label>
+									<FormField field={field} label="Inventory Status *">
 										<Select
 											value={field.state.value}
 											onValueChange={(value) =>
 												field.handleChange(value as InventoryValue)
 											}
 										>
-											<SelectTrigger id={field.name} className={"w-full"}>
+											<SelectTrigger id={field.name} className="w-full">
 												<SelectValue />
 											</SelectTrigger>
 											<SelectContent>
@@ -294,10 +267,12 @@ function RouteComponent() {
 												<SelectItem value="preorder">Preorder</SelectItem>
 											</SelectContent>
 										</Select>
-										<FieldError errors={field.state.meta.errors} />
-									</div>
+									</FormField>
 								)}
 							</form.Field>
+
+							<FieldMessage error={submitError ?? undefined} />
+
 							<form.Subscribe
 								selector={(state) => [state.canSubmit, state.isSubmitting]}
 							>
@@ -312,7 +287,7 @@ function RouteComponent() {
 										</Button>
 										<Button
 											type="button"
-											variant={"outline"}
+											variant="outline"
 											onClick={() => navigate({ to: "/products" })}
 										>
 											Cancel
