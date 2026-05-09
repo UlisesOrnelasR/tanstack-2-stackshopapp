@@ -913,6 +913,273 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+### Phase 6 — Create Product Form
+
+- [x] **Step 1 — Install TanStack Form** 📦
+
+  ```bash
+  npm i @tanstack/react-form
+  ```
+
+  TanStack Form is a headless, framework-agnostic form library. "Headless" means it manages **state and validation** but ships zero UI — you bring your own components. The key difference from something like React Hook Form: field state lives at the field level, not the form level. Each `<form.Field>` is its own subscriber and only re-renders itself when its value changes — the rest of the form stays untouched.
+
+- [x] **Step 2 — Install shadcn/ui form components** 🎨
+
+  ```bash
+  npx shadcn@latest add label input textarea select
+  ```
+
+  | Component  | What it is                                             |
+  | ---------- | ------------------------------------------------------ |
+  | `Label`    | Accessible `<label>` with proper `htmlFor` wiring      |
+  | `Input`    | Styled `<input>` — text, number, url, etc.             |
+  | `Textarea` | Styled multi-line `<textarea>`                         |
+  | `Select`   | Accessible dropdown built on Radix UI's Select primitive |
+
+- [x] **Step 3 — Add `productSchema` and `createProduct` to `src/data/products.ts`** 🗄️
+
+  The schema and the server function that writes to the DB both live in the data layer — next to the read functions already there.
+
+  **`productSchema` — the validation contract**
+
+  ```ts
+  export const productSchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    description: z.string().min(1, "Description is required"),
+    price: z
+      .string()
+      .refine((val) => !isNaN(Number(val)), "Price must be a number"),
+    badge: z.enum(["New", "Sale", "Featured", "Limited"]).nullable().optional(),
+    image: z
+      .string()
+      .url("Image must be a valid URL")
+      .max(512, "Image must be 512 chars or less"),
+    inventory: z.enum(["in-stock", "backorder", "preorder"]),
+  });
+  ```
+
+  Each rule in `productSchema` does two things at once:
+  - It **validates** the value at runtime (server-side before hitting the DB, and client-side on each keystroke via TanStack Form's validators)
+  - It **describes the error message** shown to the user when validation fails
+
+  Notice `price` is a `string` — the `<input type="number">` always gives you a string. The `.refine()` checks it converts to a real number without coercing the type.
+
+  `badge` is `.nullable().optional()` because it's genuinely optional: a product can have no badge at all.
+
+  **`createProduct` — the server function that writes to the DB**
+
+  ```ts
+  export const createProduct = createServerFn({ method: "POST" })
+    .inputValidator((data: z.infer<typeof productSchema>) =>
+      productSchema.parse(data),
+    )
+    .handler(async ({ data }): Promise<ProductSelect> => {
+      const { db } = await import("@/db");
+      const result = await db
+        .insert(products)
+        .values({ ...data, badge: data.badge ?? null })
+        .returning();
+      const product = result[0];
+      if (!product) {
+        throw new Error("Failed to create product: no product returned from database");
+      }
+      return product;
+    });
+  ```
+
+  How it works step by step:
+
+  1. `createServerFn({ method: "POST" })` — registers this as an HTTP `POST` endpoint. TanStack Start handles the networking — you call the function like a normal async function, it runs on the server.
+  2. `.inputValidator(...)` — before `handler` runs, the input is passed through `productSchema.parse()`. If the data is invalid, it throws and the handler never executes. This is the server-side safety net — validation here protects the DB even if someone bypasses the client form.
+  3. `.handler(async ({ data }) => {...})` — `data` is the already-validated, typed payload. Drizzle inserts it and returns the created row via `.returning()`. `badge ?? null` normalizes `undefined` to `null` so Drizzle's nullable column is happy.
+
+  | Chain piece        | What it does                                                          |
+  | ------------------ | --------------------------------------------------------------------- |
+  | `createServerFn`   | Creates an HTTP endpoint — runs exclusively on the server             |
+  | `.inputValidator`  | Validates and parses the raw input before the handler sees it         |
+  | `.handler`         | Receives clean, typed `data` — does the actual DB work                |
+  | `.returning()`     | Drizzle returns the inserted row — required to get the generated `id` |
+
+- [x] **Step 4 — Create `src/routes/products/create-product.tsx`** 📝
+
+  The create product route lives at `/products/create-product`. TanStack Router derives this from the file path automatically.
+
+  ```
+  src/
+  └── routes/
+      └── products/
+          └── create-product.tsx    ← /products/create-product
+  ```
+
+  **How `useForm` is initialized**
+
+  ```ts
+  const form = useForm({
+    defaultValues: {
+      name: "",
+      description: "",
+      price: "",
+      badge: undefined as BadgeValue | undefined,
+      image: "",
+      inventory: "in-stock" as InventoryValue,
+    },
+    onSubmit: async ({ value }) => {
+      try {
+        setSubmitError(null);
+        await createProduct({ data: value });
+        await router.invalidate({ sync: true }); // bust the /products query cache
+        navigate({ to: "/products" });
+      } catch {
+        setSubmitError("Something went wrong. Please try again.");
+      }
+    },
+  });
+  ```
+
+  `useForm` accepts a config object with three key properties used here:
+
+  | Property        | What it does                                                                |
+  | --------------- | --------------------------------------------------------------------------- |
+  | `defaultValues` | The initial state of every field — must match the shape of the form data    |
+  | `onSubmit`      | Runs when the form is submitted and all validators pass — receives `value`  |
+  | `validators`    | Form-level validators (field-level validators are set per `<form.Field>`)   |
+
+  After `createProduct` succeeds, `router.invalidate({ sync: true })` tells TanStack Router to re-run all active loaders — the `/products` page data is refreshed before navigating to it, so the new product appears immediately.
+
+  ***
+
+  **The `fieldValidator` helper**
+
+  Each field reuses this small adapter to connect Zod schemas to TanStack Form's validator API:
+
+  ```ts
+  function fieldValidator(schema: z.ZodTypeAny) {
+    return ({ value }: { value: unknown }) => {
+      const result = schema.safeParse(value);
+      return result.success ? undefined : result.error.issues[0]?.message;
+    };
+  }
+  ```
+
+  TanStack Form's `onChange` validator expects a function that returns `undefined` (valid) or a `string` (the error message). Zod's `.safeParse()` returns `{ success: true }` or `{ success: false, error }`. This helper bridges the two: it runs Zod's parse and converts the result to what TanStack Form expects. Each field passes in its own slice of `productSchema`:
+
+  ```ts
+  validators={{ onChange: fieldValidator(productSchema.shape.name) }}
+  ```
+
+  `productSchema.shape.name` is just the `z.string().min(1, ...)` rule for that specific field — you're not running the whole object schema, only the relevant piece.
+
+  ***
+
+  **`<form.Field>` — how each field is wired**
+
+  ```tsx
+  <form.Field
+    name="name"
+    validators={{ onChange: fieldValidator(productSchema.shape.name) }}
+  >
+    {(field) => (
+      <FormField field={field} label="Product Name *">
+        <Input
+          id={field.name}
+          value={field.state.value}
+          onChange={(e) => field.handleChange(e.target.value)}
+        />
+      </FormField>
+    )}
+  </form.Field>
+  ```
+
+  `<form.Field>` uses the **render prop pattern** — it passes a `field` object to its child function. That object contains everything about the field's current state:
+
+  | `field` property          | What it holds                                         |
+  | ------------------------- | ----------------------------------------------------- |
+  | `field.name`              | The field key (`"name"`, `"price"`, etc.)             |
+  | `field.state.value`       | Current value of the field                            |
+  | `field.state.meta.errors` | Array of validation error messages                    |
+  | `field.state.meta.isTouched` | Whether the user has interacted with the field     |
+  | `field.state.meta.isValid` | Whether the field currently passes all validators    |
+  | `field.handleChange(val)` | Update the field value and trigger `onChange` validators |
+
+  The `name` prop on `<form.Field>` is **type-safe** — TypeScript infers it from `defaultValues`. If you type `name="namex"` it's a compile error.
+
+  ***
+
+  **`FormField` and `FieldMessage` — reusable layout helpers**
+
+  Two small components handle the repetitive wrapper around each input:
+
+  ```ts
+  function FieldMessage({ error }: { error?: string }) {
+    if (!error) return null;
+    return <p className="text-sm text-destructive">{error}</p>;
+  }
+
+  function FormField({ field, label, children }) {
+    const error = field.state.meta.isTouched
+      ? field.state.meta.errors[0]
+      : undefined;
+
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={field.name}>{label}</Label>
+        {children}
+        <FieldMessage error={error} />
+      </div>
+    );
+  }
+  ```
+
+  The error only shows after `isTouched` is true — this prevents blasting the user with red errors before they've typed anything. Once they leave a field (blur) or type in it, `isTouched` flips to `true` and errors become visible.
+
+  ***
+
+  **`<form.Subscribe>` — reading form-level state**
+
+  The submit button reads two values from the form without subscribing to every field:
+
+  ```tsx
+  <form.Subscribe
+    selector={(state) => [state.canSubmit, state.isSubmitting]}
+  >
+    {([canSubmit, isSubmitting]) => (
+      <Button type="submit" disabled={!canSubmit || isSubmitting}>
+        {isSubmitting ? "Creating..." : "Create Product"}
+      </Button>
+    )}
+  </form.Subscribe>
+  ```
+
+  `selector` works like a selector in Redux — it extracts only the values you need. The button re-renders only when `canSubmit` or `isSubmitting` changes. `canSubmit` is `false` when any field has a validation error or when the form is already submitting.
+
+  ***
+
+  **Full data flow — from input to database**
+
+  ```
+  User types in <Input>
+      ↓
+  field.handleChange(value)         ← updates field state
+      ↓
+  onChange validator runs (Zod)     ← validates on each keystroke
+      ↓
+  error shown if isTouched + invalid
+      ↓
+  User clicks "Create Product"
+      ↓
+  form.handleSubmit()               ← validates all fields
+      ↓
+  onSubmit({ value }) fires         ← only if all validators pass
+      ↓
+  createProduct({ data: value })    ← server function (POST to DB)
+      ↓
+  router.invalidate()               ← busts the /products loader cache
+      ↓
+  navigate({ to: "/products" })     ← user sees the updated catalog
+  ```
+
+---
+
 ## Status
 
-> **Phase 5 — complete ✅**
+> **Phase 6 — complete ✅**
