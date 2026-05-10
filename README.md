@@ -1180,6 +1180,101 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+---
+
+### Phase 7 — Cart Page
+
+- [x] **Step 1 — Add the `empty` shadcn/ui component** 📦
+
+  ```bash
+  npx shadcn@latest add empty
+  ```
+
+  Used in the cart page to render the empty-state UI when there are no items in the cart.
+
+- [x] **Step 2 — Cart page layout with mock data** 🛒
+
+  Created `src/routes/cart.tsx` with the full layout: item list, quantity controls, order summary, and empty state — all wired to commented-out mock data so the shape is explicit:
+
+  ```ts
+  // Mock — same shape as the DB response, useful when copying to another project
+  // const cart: CartItem[] = [
+  //   { id: "1", name: "TanStack Router Pro", price: "99.99", quantity: 2, image: "...", inventory: "in-stock" },
+  // ];
+  ```
+
+- [x] **Step 3 — `addToCart`** ➕
+
+  Created `src/data/cart.ts` with the first server function.
+
+  1. **Server function** — `createServerFn({ method: "POST" })` runs on the server and receives `productId`.
+  2. **Upsert logic** — checks if the product already exists in `cartItems`; if it does, increments `quantity`; otherwise inserts a new row.
+  3. **Input validation** — `.inputValidator()` types the incoming payload as `{ productId: string }`.
+  4. **Button in `ProductCard`** — calls `addToCart({ data: { productId } })` with `e.preventDefault()` + `e.stopPropagation()` to avoid triggering the `<Link>` that wraps the card.
+  5. **Router invalidation** — `router.invalidate()` after the call causes TanStack Router to re-run active loaders without a full page reload.
+
+- [x] **Step 4 — `fetchCartItems`** 📋
+
+  1. **Server function** — does an `innerJoin` between `cartItems` and `products`, then flattens the joined rows into a plain array for the client.
+
+     ```ts
+     // The join returns rows shaped as: { cart_items: {...}, products: {...} }
+     return rows.map((row) => {
+       const cartItem = row.cart_items;
+       const product = row.products;
+       return { id: cartItem.id, name: product.name, price: product.price, quantity: cartItem.quantity, ... };
+     });
+     ```
+
+  2. **Loader in `cart.tsx`** — `loader: async () => fetchCartItems()` runs the server function before the page renders.
+  3. **`Route.useLoaderData()`** inside `CartPage` — typed data available with no manual fetch.
+  4. **Subtotal with `reduce`** — `price` comes as `string` from Drizzle's `numeric` type, so `Number(item.price) * item.quantity` converts it before summing.
+
+- [x] **Step 5 — `removeFromCart`** 🗑️
+
+  ```ts
+  export const removeFromCart = createServerFn({ method: "POST" })
+    .inputValidator((data: { cartItemId: string }) => data)
+    .handler(async ({ data }) => {
+      await db.delete(cartItems).where(eq(cartItems.id, data.cartItemId));
+    });
+  ```
+
+  In the cart page, a `removingId` state tracks which item is being deleted so only that row's buttons disable — not the whole list. After deletion, `router.invalidate()` refreshes the list.
+
+- [x] **Step 6 — `updateCartQuantity`** ➕➖
+
+  ```ts
+  export const updateCartQuantity = createServerFn({ method: "POST" })
+    .inputValidator((data: { cartItemId: string; delta: 1 | -1 }) => data)
+    .handler(async ({ data }) => {
+      const newQuantity = item.quantity + data.delta;
+      if (newQuantity <= 0) {
+        await db.delete(cartItems).where(eq(cartItems.id, data.cartItemId));
+      } else {
+        await db.update(cartItems).set({ quantity: newQuantity, updatedAt: new Date() })...
+      }
+    });
+  ```
+
+  `delta: 1 | -1` keeps the API minimal — the `+` button passes `1`, the `−` button passes `-1`. If the result reaches `0`, the item is deleted automatically.
+
+  In the cart page, an `isBusy` flag (`updatingId === item.id || removingId === item.id`) locks all three buttons of a row while any operation is in flight, preventing double-clicks and race conditions.
+
+- [x] **Step 7 — `clearCart`** 🧹
+
+  ```ts
+  export const clearCart = createServerFn({ method: "POST" }).handler(
+    async () => {
+      await db.delete(cartItems); // no WHERE — deletes all rows
+    },
+  );
+  ```
+
+  The "Clear cart" button sets a `clearing` boolean, calls `clearCart()`, then calls `router.invalidate()`. The empty state renders automatically once the list comes back empty.
+
+---
+
 ## Status
 
-> **Phase 6 — complete ✅**
+> **Phase 7 — complete ✅**
