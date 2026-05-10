@@ -16,19 +16,34 @@ export const Route = createFileRoute("/cart")({
 	component: CartPage,
 });
 
-const cart = {
-	// items: [],
-	items: [
-		{
-			id: "1",
-			name: "TanStack Router Pro",
-			price: "99.99",
-			quantity: 1,
-			image: "/tanstack-circle-logo.png",
-			inventory: "in-stock",
-		},
-	],
+type CartItem = {
+	id: string;
+	name: string;
+	price: string;
+	quantity: number;
+	image: string;
+	inventory: "in-stock" | "backorder" | "preorder";
 };
+
+const cart: { items: CartItem[] } = {
+	items: [],
+	// items: [
+	// 	{
+	// 		id: "1",
+	// 		name: "TanStack Router Pro",
+	// 		price: "99.99",
+	// 		quantity: 1,
+	// 		image: "/tanstack-circle-logo.png",
+	// 		inventory: "in-stock",
+	// 	},
+	// ],
+};
+
+const shipping = cart.items.length > 0 ? 8 : 0;
+
+const subtotal = 0;
+
+const total = subtotal + shipping;
 
 function CartPage() {
 	// ✅ EMPTY CART
@@ -59,15 +74,6 @@ function CartPage() {
 	}
 
 	// ✅ NORMAL CART
-	const shipping = cart.items.length > 0 ? 8 : 0;
-
-	const subtotal = cart.items.reduce(
-		(acc, item) => acc + Number(item.price) * item.quantity,
-		0,
-	);
-
-	const total = subtotal + shipping;
-
 	return (
 		<div className="mx-auto grid max-w-5xl gap-6 rounded-2xl border bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/80 lg:grid-cols-[2fr,1fr]">
 			<div className="space-y-4">
