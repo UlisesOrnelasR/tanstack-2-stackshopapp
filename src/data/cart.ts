@@ -2,6 +2,25 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { cartItems, products } from "#/db/schema";
 
+export const getCartItemsCount = createServerFn({ method: "GET" }).handler(
+	async () => {
+		const { db } = await import("@/db");
+		const rows = await db
+			.select()
+			.from(cartItems)
+			.innerJoin(products, eq(cartItems.productId, products.id));
+
+		const count = rows.reduce((acc, row) => acc + row.cart_items.quantity, 0);
+		const total = rows.reduce(
+			(acc, row) =>
+				acc + Number(row.products.price) * row.cart_items.quantity,
+			0,
+		);
+
+		return { count, total };
+	},
+);
+
 export const fetchCartItems = createServerFn({ method: "GET" }).handler(
 	async () => {
 		const { db } = await import("@/db");

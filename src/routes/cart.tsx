@@ -1,4 +1,5 @@
-﻿import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+﻿import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import {
@@ -7,6 +8,7 @@ import {
 	removeFromCart,
 	updateCartQuantity,
 } from "#/data/cart";
+import { cartCountQueryKey } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -48,6 +50,7 @@ export const Route = createFileRoute("/cart")({
 
 function CartPage() {
 	const router = useRouter();
+	const queryClient = useQueryClient();
 	const cart = Route.useLoaderData();
 	const [clearing, setClearing] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
@@ -63,6 +66,7 @@ function CartPage() {
 	async function handleUpdateQuantity(cartItemId: string, delta: 1 | -1) {
 		setUpdatingId(cartItemId);
 		await updateCartQuantity({ data: { cartItemId, delta } });
+		await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
 		router.invalidate();
 		setUpdatingId(null);
 	}
@@ -115,6 +119,7 @@ function CartPage() {
 						onClick={async () => {
 							setClearing(true);
 							await clearCart();
+							await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
 							router.invalidate();
 							setClearing(false);
 						}}
@@ -212,6 +217,7 @@ function CartPage() {
 											await removeFromCart({
 												data: { cartItemId: item.id },
 											});
+											await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
 											router.invalidate();
 											setRemovingId(null);
 										}}

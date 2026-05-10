@@ -1273,6 +1273,94 @@ This is a living document. Each step gets checked off as it's done.
 
   The "Clear cart" button sets a `clearing` boolean, calls `clearCart()`, then calls `router.invalidate()`. The empty state renders automatically once the list comes back empty.
 
+- [x] **Step 8 — Cart badge in the Header** 🏷️
+
+  The Header needed to show the total item count and cost without loading the full cart data. Four pieces work together to make this happen.
+
+  ***
+
+  **`getCartItemsCount` — a lightweight server function**
+
+  Instead of reusing `fetchCartItems` (which fetches every field of every item), a dedicated function does a single join and returns only two numbers:
+
+  ```ts
+  export const getCartItemsCount = createServerFn({ method: "GET" }).handler(
+    async () => {
+      const rows = await db
+        .select()
+        .from(cartItems)
+        .innerJoin(products, eq(cartItems.productId, products.id));
+
+      const count = rows.reduce((acc, row) => acc + row.cart_items.quantity, 0);
+      const total = rows.reduce(
+        (acc, row) => acc + Number(row.products.price) * row.cart_items.quantity,
+        0,
+      );
+
+      return { count, total };
+    },
+  );
+  ```
+
+  `count` is the sum of all quantities (not the number of rows) — if you have 3 units of the same product, it counts as 3, not 1.
+
+  ***
+
+  **`useQuery` in the Header**
+
+  The Header is not a route — it has no loader. `useQuery` is the right tool here: it fetches and caches the data on the client, and refetches automatically on window focus.
+
+  ```ts
+  const { data: cartSummary } = useQuery({
+    queryKey: cartCountQueryKey,   // ["cart-count"]
+    queryFn: () => getCartItemsCount(),
+    staleTime: 0,                  // always considered stale → refetch on window focus
+  });
+
+  const itemCount = cartSummary?.count ?? 0;
+  const total = cartSummary?.total ?? 0;
+  ```
+
+  `staleTime: 0` means the cached value is immediately considered stale after it's fetched. This makes React Query refetch automatically the next time the user focuses the window — a useful safety net if the cache ever gets out of sync.
+
+  ***
+
+  **`cartCountQueryKey` — one source of truth for the cache key**
+
+  The query key `["cart-count"]` is used in three different files: `Header.tsx`, `ProductCard.tsx`, and `cart.tsx`. If it were written as a plain string in each file, a typo would silently break the invalidation. Instead, it's exported once from `Header.tsx`:
+
+  ```ts
+  // Header.tsx
+  export const cartCountQueryKey = ["cart-count"] as const;
+
+  // ProductCard.tsx and cart.tsx
+  import { cartCountQueryKey } from "@/components/Header";
+  ```
+
+  `as const` makes the type `readonly ["cart-count"]` instead of `string[]` — so TypeScript catches mismatches at compile time.
+
+  ***
+
+  **Invalidation on every cart mutation**
+
+  `staleTime: 0` + window focus is a passive safety net. For the badge to update *immediately* when the user adds or removes items, every mutation explicitly invalidates the query:
+
+  ```ts
+  // ProductCard — after addToCart
+  await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
+
+  // cart.tsx — after updateCartQuantity, removeFromCart, and clearCart
+  await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
+  ```
+
+  `invalidateQueries` marks the cache entry as stale and triggers a refetch right away. The Header re-renders with the new count and total the moment the mutation completes — no navigation or window focus needed.
+
+  | Trigger | What updates |
+  |---|---|
+  | Add to cart (ProductCard) | `invalidateQueries` → badge updates immediately |
+  | Remove / update / clear (cart page) | `invalidateQueries` → badge updates immediately |
+  | User switches tabs and comes back | `staleTime: 0` + `refetchOnWindowFocus` → badge syncs as fallback |
+
 ---
 
 ## Status

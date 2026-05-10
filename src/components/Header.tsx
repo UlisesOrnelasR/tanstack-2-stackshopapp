@@ -1,7 +1,20 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag } from "lucide-react";
+import { getCartItemsCount } from "#/data/cart";
+
+export const cartCountQueryKey = ["cart-count"] as const;
 
 export default function Header() {
+	const { data: cartSummary } = useQuery({
+		queryKey: cartCountQueryKey,
+		queryFn: () => getCartItemsCount(),
+		staleTime: 0,
+	});
+
+	const itemCount = cartSummary?.count ?? 0;
+	const total = cartSummary?.total ?? 0;
+
 	return (
 		<header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
 			<div className="mx-auto max-w-6xl px-4 py-3 items-center justify-between flex">
@@ -41,10 +54,10 @@ export default function Header() {
 					>
 						<span>Cart</span>
 						<span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-900 px-2 text-[11px] font-bold text-white">
-							0
+							{itemCount}
 						</span>
-						<span className="hidden text-[11px] font-medium tex-slate-500 sm:inline">
-							$25
+						<span className="hidden text-[11px] font-medium text-slate-500 sm:inline">
+							${total.toFixed(2)}
 						</span>
 					</Link>
 				</div>

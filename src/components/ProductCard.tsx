@@ -1,8 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
 import { ShoppingBagIcon } from "lucide-react";
 import { useState } from "react";
-import type { ProductSelect } from "#/db/schema";
 import { addToCart } from "#/data/cart";
+import type { ProductSelect } from "#/db/schema";
+import { cartCountQueryKey } from "@/components/Header";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import {
@@ -22,6 +24,7 @@ const inventoryTone = {
 
 export function ProductCard({ product }: { product: ProductSelect }) {
 	const router = useRouter();
+	const queryClient = useQueryClient();
 	const [adding, setAdding] = useState(false);
 
 	return (
@@ -76,6 +79,7 @@ export function ProductCard({ product }: { product: ProductSelect }) {
 							e.stopPropagation();
 							setAdding(true);
 							await addToCart({ data: { productId: product.id } });
+							await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
 							router.invalidate();
 							setAdding(false);
 						}}
