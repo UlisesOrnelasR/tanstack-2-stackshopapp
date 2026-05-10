@@ -33,6 +33,30 @@ export const fetchCartItems = createServerFn({ method: "GET" }).handler(
 	},
 );
 
+export const updateCartQuantity = createServerFn({ method: "POST" })
+	.inputValidator((data: { cartItemId: string; delta: 1 | -1 }) => data)
+	.handler(async ({ data }) => {
+		const { db } = await import("@/db");
+		const [item] = await db
+			.select()
+			.from(cartItems)
+			.where(eq(cartItems.id, data.cartItemId))
+			.limit(1);
+
+		if (!item) return;
+
+		const newQuantity = item.quantity + data.delta;
+
+		if (newQuantity <= 0) {
+			await db.delete(cartItems).where(eq(cartItems.id, data.cartItemId));
+		} else {
+			await db
+				.update(cartItems)
+				.set({ quantity: newQuantity, updatedAt: new Date() })
+				.where(eq(cartItems.id, data.cartItemId));
+		}
+	});
+
 export const removeFromCart = createServerFn({ method: "POST" })
 	.inputValidator((data: { cartItemId: string }) => data)
 	.handler(async ({ data }) => {
