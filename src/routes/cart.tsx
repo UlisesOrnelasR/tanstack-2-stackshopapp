@@ -1,12 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, ShoppingBag } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+
+import {
+	Empty,
+	EmptyContent,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@/components/ui/empty";
 
 export const Route = createFileRoute("/cart")({
 	component: CartPage,
 });
 
 const cart = {
+	// items: [],
 	items: [
 		{
 			id: "1",
@@ -16,18 +27,38 @@ const cart = {
 			image: "/tanstack-circle-logo.png",
 			inventory: "in-stock",
 		},
-		{
-			id: "2",
-			name: "TanStack Query Enterprise",
-			price: "149.99",
-			quantity: 2,
-			image: "/tanstack-circle-logo.png",
-			inventory: "backorder",
-		},
 	],
 };
 
 function CartPage() {
+	// ✅ EMPTY CART
+	if (cart.items.length === 0) {
+		return (
+			<div className="mx-auto max-w-5xl rounded-2xl border bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+				<Empty>
+					<EmptyHeader>
+						<EmptyMedia variant="icon">
+							<ShoppingBag className="size-6" />
+						</EmptyMedia>
+
+						<EmptyTitle>Your cart is empty</EmptyTitle>
+
+						<EmptyDescription>
+							Add a few items from the catalog to see them here.
+						</EmptyDescription>
+					</EmptyHeader>
+
+					<EmptyContent>
+						<Link to="/products">
+							<Button>Browse products</Button>
+						</Link>
+					</EmptyContent>
+				</Empty>
+			</div>
+		);
+	}
+
+	// ✅ NORMAL CART
 	const shipping = cart.items.length > 0 ? 8 : 0;
 
 	const subtotal = cart.items.reduce(
@@ -43,6 +74,7 @@ function CartPage() {
 				<div className="flex items-center justify-between">
 					<div>
 						<h1 className="text-2xl font-semibold">Cart</h1>
+
 						<p className="text-sm text-slate-600 dark:text-slate-300">
 							Review your picks before checking out.
 						</p>
@@ -79,7 +111,9 @@ function CartPage() {
 
 								<div className="flex items-center gap-3 text-sm font-semibold">
 									<span>${Number(item.price).toFixed(2)}</span>
+
 									<span className="text-slate-400">·</span>
+
 									<span className="text-slate-600 dark:text-slate-300">
 										{item.inventory === "in-stock"
 											? "In stock"
@@ -134,16 +168,19 @@ function CartPage() {
 				<div className="mt-4 space-y-3 text-sm">
 					<div className="flex justify-between">
 						<span className="text-slate-600 dark:text-slate-300">Subtotal</span>
+
 						<span className="font-semibold">${subtotal.toFixed(2)}</span>
 					</div>
 
 					<div className="flex justify-between">
 						<span className="text-slate-600 dark:text-slate-300">Shipping</span>
+
 						<span className="font-semibold">${shipping.toFixed(2)}</span>
 					</div>
 
-					<div className="border-t pt-3 flex justify-between text-base font-bold dark:border-slate-800">
+					<div className="flex justify-between border-t pt-3 text-base font-bold dark:border-slate-800">
 						<span>Total</span>
+
 						<span>${total.toFixed(2)}</span>
 					</div>
 				</div>
