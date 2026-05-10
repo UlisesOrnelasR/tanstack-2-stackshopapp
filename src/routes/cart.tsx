@@ -1,6 +1,7 @@
-﻿import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
-import { fetchCartItems } from "#/data/cart";
+import { useState } from "react";
+import { fetchCartItems, removeFromCart } from "#/data/cart";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -41,14 +42,17 @@ export const Route = createFileRoute("/cart")({
 });
 
 function CartPage() {
+	const router = useRouter();
 	const cart = Route.useLoaderData();
-	console.log("---cart--- on client", cart);
+	const [removingId, setRemovingId] = useState<string | null>(null);
+
 	const subtotal = cart.reduce(
 		(acc, item) => acc + Number(item.price) * item.quantity,
 		0,
 	);
 	const shipping = 0;
 	const total = subtotal + shipping;
+
 	// ✅ EMPTY CART
 	if (cart.length === 0) {
 		return (
@@ -162,8 +166,15 @@ function CartPage() {
 									variant="ghost"
 									type="button"
 									className="text-slate-500 hover:text-red-500"
+									disabled={removingId === item.id}
+									onClick={async () => {
+										setRemovingId(item.id);
+										await removeFromCart({ data: { cartItemId: item.id } });
+										router.invalidate();
+										setRemovingId(null);
+									}}
 								>
-									Remove
+									{removingId === item.id ? "Removing..." : "Remove"}
 								</Button>
 							</div>
 						</div>

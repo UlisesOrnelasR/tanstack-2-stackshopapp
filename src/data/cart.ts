@@ -2,31 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { cartItems, products } from "#/db/schema";
 
-export const addToCart = createServerFn({ method: "POST" })
-	.inputValidator((data: { productId: string }) => data)
-	.handler(async ({ data }) => {
-		const { db } = await import("@/db");
-		try {
-			const [existing] = await db
-				.select()
-				.from(cartItems)
-				.where(eq(cartItems.productId, data.productId))
-				.limit(1);
-
-			if (existing) {
-				await db
-					.update(cartItems)
-					.set({ quantity: existing.quantity + 1, updatedAt: new Date() })
-					.where(eq(cartItems.id, existing.id));
-			} else {
-				await db.insert(cartItems).values({ productId: data.productId });
-			}
-		} catch (error) {
-			console.error("Error adding to cart:", error);
-			throw error;
-		}
-	});
-
 export const fetchCartItems = createServerFn({ method: "GET" }).handler(
 	async () => {
 		const { db } = await import("@/db");
@@ -57,3 +32,40 @@ export const fetchCartItems = createServerFn({ method: "GET" }).handler(
 		}
 	},
 );
+
+export const removeFromCart = createServerFn({ method: "POST" })
+	.inputValidator((data: { cartItemId: string }) => data)
+	.handler(async ({ data }) => {
+		const { db } = await import("@/db");
+		try {
+			await db.delete(cartItems).where(eq(cartItems.id, data.cartItemId));
+		} catch (error) {
+			console.error("Error removing from cart:", error);
+			throw error;
+		}
+	});
+
+export const addToCart = createServerFn({ method: "POST" })
+	.inputValidator((data: { productId: string }) => data)
+	.handler(async ({ data }) => {
+		const { db } = await import("@/db");
+		try {
+			const [existing] = await db
+				.select()
+				.from(cartItems)
+				.where(eq(cartItems.productId, data.productId))
+				.limit(1);
+
+			if (existing) {
+				await db
+					.update(cartItems)
+					.set({ quantity: existing.quantity + 1, updatedAt: new Date() })
+					.where(eq(cartItems.id, existing.id));
+			} else {
+				await db.insert(cartItems).values({ productId: data.productId });
+			}
+		} catch (error) {
+			console.error("Error adding to cart:", error);
+			throw error;
+		}
+	});
