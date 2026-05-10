@@ -1,8 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
-
+import { fetchCartItems } from "#/data/cart";
 import { Button } from "@/components/ui/button";
-
 import {
 	Empty,
 	EmptyContent,
@@ -12,42 +11,46 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 
+// DB shape: Array<{ id: string; name: string; price: string; quantity: number; image: string; inventory: string }>
+// Mock — same shape as the DB response above, useful when copying to another project
+// const cart: CartItem[] = [
+// 	{
+// 		id: "1",
+// 		name: "TanStack Router Pro",
+// 		price: "99.99",
+// 		quantity: 2,
+// 		image: "/tanstack-circle-logo.png",
+// 		inventory: "in-stock",
+// 	},
+// ];
+
+// type CartItem = {
+// 	id: string;
+// 	name: string;
+// 	price: string;
+// 	quantity: number;
+// 	image: string;
+// 	inventory: "in-stock" | "backorder" | "preorder";
+// };
+
 export const Route = createFileRoute("/cart")({
 	component: CartPage,
+	loader: async () => {
+		return await fetchCartItems();
+	},
 });
 
-type CartItem = {
-	id: string;
-	name: string;
-	price: string;
-	quantity: number;
-	image: string;
-	inventory: "in-stock" | "backorder" | "preorder";
-};
-
-const cart: { items: CartItem[] } = {
-	items: [],
-	// items: [
-	// 	{
-	// 		id: "1",
-	// 		name: "TanStack Router Pro",
-	// 		price: "99.99",
-	// 		quantity: 1,
-	// 		image: "/tanstack-circle-logo.png",
-	// 		inventory: "in-stock",
-	// 	},
-	// ],
-};
-
-const shipping = cart.items.length > 0 ? 8 : 0;
-
-const subtotal = 0;
-
-const total = subtotal + shipping;
-
 function CartPage() {
+	const cart = Route.useLoaderData();
+	console.log("---cart--- on client", cart);
+	const subtotal = cart.reduce(
+		(acc, item) => acc + Number(item.price) * item.quantity,
+		0,
+	);
+	const shipping = 0;
+	const total = subtotal + shipping;
 	// ✅ EMPTY CART
-	if (cart.items.length === 0) {
+	if (cart.length === 0) {
 		return (
 			<div className="mx-auto max-w-5xl rounded-2xl border bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
 				<Empty>
@@ -92,7 +95,7 @@ function CartPage() {
 				</div>
 
 				<div className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-xs dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-950/40">
-					{cart.items.map((item) => (
+					{cart.map((item) => (
 						<div
 							key={item.id}
 							className="grid gap-4 p-4 sm:grid-cols-[auto,1fr,auto]"

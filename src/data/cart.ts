@@ -31,23 +31,28 @@ export const fetchCartItems = createServerFn({ method: "GET" }).handler(
 	async () => {
 		const { db } = await import("@/db");
 		try {
-			const cart = await db
+			// innerJoin returns rows shaped as: { cart_items: {...}, products: {...} }
+			const rows = await db
 				.select()
 				.from(cartItems)
 				.innerJoin(products, eq(cartItems.productId, products.id));
 
-			console.log("---cart--- on server", cart);
+			// Flatten each joined row into a single object for the client
+			return rows.map((row) => {
+				const cartItem = row.cart_items;
+				const product = row.products;
 
-			return cart.map(({ cart_items, products: product }) => ({
-				id: cart_items.id,
-				name: product.name,
-				price: product.price,
-				quantity: cart_items.quantity,
-				image: product.image,
-				inventory: product.inventory,
-			}));
+				return {
+					id: cartItem.id,
+					name: product.name,
+					price: product.price,
+					quantity: cartItem.quantity,
+					image: product.image,
+					inventory: product.inventory,
+				};
+			});
 		} catch (error) {
-			console.error("Error getting all products: ", error);
+			console.error("Error fetching cart items:", error);
 			return [];
 		}
 	},

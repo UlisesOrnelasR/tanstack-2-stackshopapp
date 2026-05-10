@@ -24,7 +24,7 @@ const loggerMiddleware = createMiddleware().server(
 
 export const Route = createFileRoute("/products/")({
 	loader: async () => {
-		console.log("---loader--");
+		// console.log("---loader--");
 		return getAllProducts();
 	},
 
