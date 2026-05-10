@@ -2,6 +2,7 @@
 import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import {
+	clearCart,
 	fetchCartItems,
 	removeFromCart,
 	updateCartQuantity,
@@ -48,6 +49,7 @@ export const Route = createFileRoute("/cart")({
 function CartPage() {
 	const router = useRouter();
 	const cart = Route.useLoaderData();
+	const [clearing, setClearing] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
 	const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -105,8 +107,19 @@ function CartPage() {
 						</p>
 					</div>
 
-					<Button variant="ghost" size="sm" type="button">
-						Clear cart
+					<Button
+						variant="ghost"
+						size="sm"
+						type="button"
+						disabled={clearing}
+						onClick={async () => {
+							setClearing(true);
+							await clearCart();
+							router.invalidate();
+							setClearing(false);
+						}}
+					>
+						{clearing ? "Clearing..." : "Clear cart"}
 					</Button>
 				</div>
 

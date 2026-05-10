@@ -57,6 +57,13 @@ export const updateCartQuantity = createServerFn({ method: "POST" })
 		}
 	});
 
+export const clearCart = createServerFn({ method: "POST" }).handler(
+	async () => {
+		const { db } = await import("@/db");
+		await db.delete(cartItems);
+	},
+);
+
 export const removeFromCart = createServerFn({ method: "POST" })
 	.inputValidator((data: { cartItemId: string }) => data)
 	.handler(async ({ data }) => {
