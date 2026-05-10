@@ -1,6 +1,11 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Link,
+	notFound,
+	useRouter,
+} from "@tanstack/react-router";
 import { ArrowLeftIcon, ShoppingBagIcon, SparklesIcon } from "lucide-react";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { RecommendedProducts } from "#/components/RecommndedProducts";
 import { Button } from "#/components/ui/button";
 import {
@@ -12,6 +17,7 @@ import {
 	CardTitle,
 } from "#/components/ui/card";
 import { Skeleton } from "#/components/ui/skeleton";
+import { addToCart } from "#/data/cart";
 import { getProductById, getRecommendedProducts } from "#/data/products";
 
 export const Route = createFileRoute("/products/$id")({
@@ -55,8 +61,10 @@ export const Route = createFileRoute("/products/$id")({
 });
 
 function RouteComponent() {
+	const router = useRouter();
 	const { product, recommendedProducts } = Route.useLoaderData();
 	console.log(product);
+	const [adding, setAdding] = useState(false);
 
 	return (
 		<div>
@@ -117,12 +125,18 @@ function RouteComponent() {
 								<div className="flex flex-wrap gap-3">
 									<Button
 										className="bg-slate-900 px-4 text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:bg-white dark:text-slate-900"
-										onClick={() => {
-											console.log("add to cart");
+										disabled={adding}
+										onClick={async (e) => {
+											e.preventDefault();
+											e.stopPropagation();
+											setAdding(true);
+											await addToCart({ data: { productId: product.id } });
+											router.invalidate();
+											setAdding(false);
 										}}
 									>
 										<ShoppingBagIcon size={16} />
-										Add to cart
+										{adding ? "Adding..." : "Add to Cart"}
 									</Button>
 									<Button
 										variant="outline"
