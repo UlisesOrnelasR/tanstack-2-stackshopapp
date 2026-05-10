@@ -1,6 +1,8 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { ShoppingBagIcon } from "lucide-react";
+import { useState } from "react";
 import type { ProductSelect } from "#/db/schema";
+import { addToCart } from "#/data/cart";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import {
@@ -19,6 +21,9 @@ const inventoryTone = {
 };
 
 export function ProductCard({ product }: { product: ProductSelect }) {
+	const router = useRouter();
+	const [adding, setAdding] = useState(false);
+
 	return (
 		<Link
 			to="/products/$id"
@@ -65,13 +70,18 @@ export function ProductCard({ product }: { product: ProductSelect }) {
 						size="sm"
 						variant={"secondary"}
 						className={"bg-slate-900 text-white hover:bg-slate-800"}
-						onClick={(e) => {
-							console.log("add to cart");
-							e.preventDefault(); //prevents go to product page
-							e.stopPropagation(); //prevents go to product page
+						disabled={adding}
+						onClick={async (e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							setAdding(true);
+							await addToCart({ data: { productId: product.id } });
+							router.invalidate();
+							setAdding(false);
 						}}
 					>
-						<ShoppingBagIcon size={16} /> Add to Cart
+						<ShoppingBagIcon size={16} />
+						{adding ? "Adding..." : "Add to Cart"}
 					</Button>
 				</CardFooter>
 			</Card>
