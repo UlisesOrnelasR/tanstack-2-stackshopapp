@@ -1,3 +1,4 @@
+![preview](./assets/preview.png)
 # StackShop — Modern E-Commerce Platform 🛒
 
 > Built with TanStack Start · React 19 · Drizzle ORM · Supabase
