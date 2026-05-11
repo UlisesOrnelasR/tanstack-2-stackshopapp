@@ -4,11 +4,71 @@
 
 ---
 
+## Table of Contents
+
+**Overview**
+- [What is this?](#overview)
+- [Core Technologies](#core-technologies)
+- [Application Features](#application-features)
+- [Project Structure](#project-structure)
+- [Database Schema](#database-schema)
+
+**Build Log**
+- [Phase 1 — Project Foundation](#phase-1)
+  - [Step 1 — Scaffold the project](#p1-s1)
+  - [Step 2 — Cleanup, Header & product routes](#p1-s2)
+  - [Step 3 — Add shadcn/ui on top of Tailwind](#p1-s3)
+  - [Step 4 — Base Header design](#p1-s4)
+- [Phase 2 — Data Layer & Product Display](#phase-2)
+  - [Step 1 — Fake product data & server loader](#p2-s1)
+  - [Step 2 — ProductCard component](#p2-s2)
+  - [Step 3 — Products catalog page](#p2-s3)
+  - [Step 4 — Route Middleware](#p2-s4)
+  - [Step 5 — TanStack Query integration](#p2-s5)
+- [Phase 3 — Database Setup with Drizzle + Supabase](#phase-3)
+  - [Step 1 — Install dependencies](#p3-s1)
+  - [Step 2 — Create a Supabase project](#p3-s2)
+  - [Step 3 — Configure .env](#p3-s3)
+  - [Step 4 — Database client](#p3-s4)
+  - [Step 5 — Define the schema](#p3-s5)
+  - [Step 6 — Drizzle config](#p3-s6)
+  - [Step 7 — Add scripts to package.json](#p3-s7)
+  - [Step 8 — Generate and push the schema](#p3-s8)
+  - [Step 9 — Seed the database](#p3-s9)
+- [Phase 4 — Real Data Layer](#phase-4)
+  - [Step 1 — Install Zod](#p4-s1)
+  - [Step 2 — Create src/data/products.ts](#p4-s2)
+  - [Step 3 — Wire routes to the data layer](#p4-s3)
+  - [Step 4 — Product detail page](#p4-s4)
+  - [Step 5 — Dynamic metadata](#p4-s5)
+- [Phase 5 — Streaming UI & Loading States](#phase-5)
+  - [Step 1 — Suspense + use() for streamed recommended products](#p5-s1)
+- [Phase 6 — Create Product Form](#phase-6)
+  - [Step 1 — Install TanStack Form](#p6-s1)
+  - [Step 2 — Install shadcn/ui form components](#p6-s2)
+  - [Step 3 — productSchema & createProduct](#p6-s3)
+  - [Step 4 — create-product.tsx route](#p6-s4)
+- [Phase 7 — Cart Page](#phase-7)
+  - [Step 1 — Add the empty component](#p7-s1)
+  - [Step 2 — Cart page layout](#p7-s2)
+  - [Step 3 — addToCart](#p7-s3)
+  - [Step 4 — fetchCartItems](#p7-s4)
+  - [Step 5 — removeFromCart](#p7-s5)
+  - [Step 6 — updateCartQuantity](#p7-s6)
+  - [Step 7 — clearCart](#p7-s7)
+  - [Step 8 — Cart badge in the Header](#p7-s8)
+
+---
+
+<a id="overview"></a>
+
 ## What is this?
 
 **StackShop** is a base project designed to serve as the foundation for any future e-commerce.
 
 ---
+
+<a id="core-technologies"></a>
 
 ## 🛠️ Core Technologies
 
@@ -27,6 +87,8 @@
 
 ---
 
+<a id="application-features"></a>
+
 ## 💫 Application Features
 
 - **Product catalog** — browsable grid with badges, ratings, reviews, and inventory status
@@ -41,6 +103,8 @@
 - **Selective SSR** — each route controls its own rendering strategy independently
 
 ---
+
+<a id="project-structure"></a>
 
 ## 📁 Project Structure
 
@@ -70,6 +134,8 @@ src/
 ```
 
 ---
+
+<a id="database-schema"></a>
 
 ## 🗄️ Database Schema
 
@@ -104,13 +170,17 @@ src/
 
 ---
 
+<a id="build-log"></a>
+
 ## Build Log — Step by Step
 
 This is a living document. Each step gets checked off as it's done.
 
+<a id="phase-1"></a>
+
 ### Phase 1 — Project Foundation
 
-- [x] **Step 1 — Scaffold the project** with the TanStack CLI
+- [x] <a id="p1-s1"></a>**Step 1 — Scaffold the project** with the TanStack CLI
 
   ```bash
   npx @tanstack/cli@latest create
@@ -122,7 +192,7 @@ This is a living document. Each step gets checked off as it's done.
   - Deployment adapter → **Railway**
   - Add-ons → **Compiler**
 
-- [x] **Step 2 — Cleanup, Header & product routes** 🧹
+- [x] <a id="p1-s2"></a>**Step 2 — Cleanup, Header & product routes** 🧹
 
   Stripped the boilerplate, built the first component, and added the product routes.
 
@@ -141,7 +211,7 @@ This is a living document. Each step gets checked off as it's done.
   - Added static route `/products`
   - Added dynamic route `/products/$id`
 
-- [x] **Step 3 — Add shadcn/ui on top of Tailwind** 🎨
+- [x] <a id="p1-s3"></a>**Step 3 — Add shadcn/ui on top of Tailwind** 🎨
 
   TanStack Start ships with Tailwind by default — we keep it and layer shadcn/ui on top for a proper component library foundation.
 
@@ -169,7 +239,7 @@ This is a living document. Each step gets checked off as it's done.
   @import "shadcn/tailwind.css";
   ```
 
-- [x] **Step 4 — Base Header design** 🏠
+- [x] <a id="p1-s4"></a>**Step 4 — Base Header design** 🏠
 
   Styled the `Header` component and added the global layout wrapper in `__root.tsx`.
 
@@ -181,9 +251,11 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+<a id="phase-2"></a>
+
 ### Phase 2 — Data Layer & Product Display
 
-- [x] **Step 1 — Fake product data & server loader** 🗄️
+- [x] <a id="p2-s1"></a>**Step 1 — Fake product data & server loader** 🗄️
 
   Wired up the home page with real data flow using TanStack Router's `loader` — the closest thing to a server function in this stack.
 
@@ -225,7 +297,7 @@ This is a living document. Each step gets checked off as it's done.
   - Consumed loader data in the component via `Route.useLoaderData()`
   - Sliced the first 3 products for the featured section on the home page
 
-- [x] **Step 2 — ProductCard component** 🃏
+- [x] <a id="p2-s2"></a>**Step 2 — ProductCard component** 🃏
 
   Built the base `ProductCard` component used to display individual products in the grid.
 
@@ -247,7 +319,7 @@ This is a living document. Each step gets checked off as it's done.
     - `preorder` → indigo
   - "Add to Cart" button uses `e.preventDefault()` + `e.stopPropagation()` to prevent navigation while inside the `<Link>` wrapper
 
-- [x] **Step 3 — Products catalog page** 🗂️
+- [x] <a id="p2-s3"></a>**Step 3 — Products catalog page** 🗂️
 
   Built the full `/products` catalog page that fetches and displays all products using a **server function** — a step up from the plain `loader` used on the home page.
 
@@ -279,7 +351,7 @@ This is a living document. Each step gets checked off as it's done.
   });
   ```
 
-- [x] **Step 4 — Route Middleware** 🔍
+- [x] <a id="p2-s4"></a>**Step 4 — Route Middleware** 🔍
 
   Added server-side middleware to the `/products` route using `createMiddleware` from `@tanstack/react-start`.
 
@@ -330,7 +402,7 @@ This is a living document. Each step gets checked off as it's done.
   | `handlers`   | Custom HTTP method handlers (`POST`, `PUT`, etc.) beyond the default `GET` |
   | `next()`     | Passes control to the next middleware or to the route itself — mandatory   |
 
-- [x] **Step 5 — TanStack Query integration** ⚡
+- [x] <a id="p2-s5"></a>**Step 5 — TanStack Query integration** ⚡
 
   Added `@tanstack/react-query` to enable client-side caching and background refetching on top of the existing server-fetched data.
 
@@ -450,9 +522,11 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+<a id="phase-3"></a>
+
 ### Phase 3 — Database Setup with Drizzle + Supabase
 
-- [x] **Step 1 — Install dependencies** 📦
+- [x] <a id="p3-s1"></a>**Step 1 — Install dependencies** 📦
 
   ```bash
   npm i drizzle-orm postgres pg
@@ -473,7 +547,7 @@ This is a living document. Each step gets checked off as it's done.
   | `@types/pg`   | Type definitions for the `pg` driver             |
   | `cross-env`   | Set env variables cross-platform (Win/Mac/Linux) |
 
-- [x] **Step 2 — Create a Supabase project** ☁️
+- [x] <a id="p3-s2"></a>**Step 2 — Create a Supabase project** ☁️
   1. Go to [supabase.com](https://supabase.com) and create a new project
   2. Once created, navigate to **Project Settings → Database**
   3. Under **Connection string**, select **Session pooler** mode and copy the URI:
@@ -484,7 +558,7 @@ This is a living document. Each step gets checked off as it's done.
 
   Session pooler works over port `5432` — no firewall issues and compatible with Drizzle's `pg` driver.
 
-- [x] **Step 3 — Configure `.env`** 🔐
+- [x] <a id="p3-s3"></a>**Step 3 — Configure `.env`** 🔐
 
   Create a `.env` file at the project root and paste the connection string, replacing `[YOUR-PASSWORD]`:
 
@@ -492,7 +566,7 @@ This is a living document. Each step gets checked off as it's done.
   DATABASE_URL="postgresql://postgres.fceondpyuqyitudbtnuw:<yourpassword>@aws-1-us-west-2.pooler.supabase.com:5432/postgres"
   ```
 
-- [x] **Step 4 — Database client** `src/db/index.ts`
+- [x] <a id="p3-s4"></a>**Step 4 — Database client** `src/db/index.ts`
 
   The client creates a connection pool and exports a typed `db` instance wired to the schema:
 
@@ -517,7 +591,7 @@ This is a living document. Each step gets checked off as it's done.
 
   The `ssl` block is conditional — it enables SSL only when connecting to Supabase, so local development without SSL still works.
 
-- [x] **Step 5 — Define the schema** `src/db/schema.ts`
+- [x] <a id="p3-s5"></a>**Step 5 — Define the schema** `src/db/schema.ts`
 
   Two tables: `products` (the catalog) and `cart_items` (shopping cart). Both use UUID primary keys and Drizzle enums for constrained string fields.
 
@@ -580,7 +654,7 @@ This is a living document. Each step gets checked off as it's done.
 
   `$inferSelect` and `$inferInsert` let Drizzle derive the TypeScript types directly from the schema — no duplication.
 
-- [x] **Step 6 — Drizzle config** `drizzle.config.ts`
+- [x] <a id="p3-s6"></a>**Step 6 — Drizzle config** `drizzle.config.ts`
 
   ```ts
   import "dotenv/config";
@@ -602,7 +676,7 @@ This is a living document. Each step gets checked off as it's done.
   | `schema`  | Source of truth — your schema definition          |
   | `dialect` | Database engine (`postgresql`, `mysql`, `sqlite`) |
 
-- [x] **Step 7 — Add scripts to `package.json`** ⚙️
+- [x] <a id="p3-s7"></a>**Step 7 — Add scripts to `package.json`** ⚙️
 
   ```json
   "scripts": {
@@ -624,7 +698,7 @@ This is a living document. Each step gets checked off as it's done.
 
   > In production use `generate` + `migrate` for a proper migration history. `push` is fast for prototyping — it diffs and applies directly.
 
-- [x] **Step 8 — Generate and push the schema** 🚀
+- [x] <a id="p3-s8"></a>**Step 8 — Generate and push the schema** 🚀
 
   Generate the SQL migration files from your schema:
 
@@ -640,7 +714,7 @@ This is a living document. Each step gets checked off as it's done.
 
   Once done, open your Supabase project → **Table Editor** — the `products` and `cart_items` tables are there.
 
-- [x] **Step 9 — Seed the database** 🌱
+- [x] <a id="p3-s9"></a>**Step 9 — Seed the database** 🌱
 
   `src/db/seedDb.ts` inserts 8 sample products. It checks for existing rows before inserting — pass `--reset` to wipe and reseed.
 
@@ -687,9 +761,11 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+<a id="phase-4"></a>
+
 ### Phase 4 — Real Data Layer
 
-- [x] **Step 1 — Install Zod** 📦
+- [x] <a id="p4-s1"></a>**Step 1 — Install Zod** 📦
 
   ```bash
   npm install zod
@@ -697,7 +773,7 @@ This is a living document. Each step gets checked off as it's done.
 
   Zod is a TypeScript-first schema validation library. It validates data at **runtime** — something TypeScript alone can't do (types disappear after compile). We use it here to validate the `id` received by `getProductById` before it reaches the database.
 
-- [x] **Step 2 — Create `src/data/products.ts`** 🗄️
+- [x] <a id="p4-s2"></a>**Step 2 — Create `src/data/products.ts`** 🗄️
 
   Instead of writing `createServerFn` directly inside each route file, all server functions live in a dedicated data layer:
 
@@ -763,7 +839,7 @@ This is a living document. Each step gets checked off as it's done.
   | `getRecommendedProducts` | `/` loader                      | First 3 products         |
   | `getProductById`         | `/products/$id` loader          | Single product or `null` |
 
-- [x] **Step 3 — Wire routes to the data layer** 🔌
+- [x] <a id="p4-s3"></a>**Step 3 — Wire routes to the data layer** 🔌
 
   Each route now just imports and calls the right function. No data logic in the route:
 
@@ -811,7 +887,7 @@ This is a living document. Each step gets checked off as it's done.
 
   The `params.id` from the URL is passed as `data` — which is the input that `.inputValidator()` receives, and Zod validates before the handler runs.
 
-- [x] **Step 4 — Product detail page** 🖼️
+- [x] <a id="p4-s4"></a>**Step 4 — Product detail page** 🖼️
 
   Built the `/products/$id` route — the full product detail view consuming real data from the database.
 
@@ -862,7 +938,7 @@ This is a living document. Each step gets checked off as it's done.
 
   The `?.` optional chaining is needed because `getProductById` returns `Product | null` — if no row matches the `id`, `null` propagates safely instead of crashing.
 
-- [x] **Step 5 — Dynamic metadata on the product detail page** 🏷️
+- [x] <a id="p4-s5"></a>**Step 5 — Dynamic metadata on the product detail page** 🏷️
 
   Added the `head()` function to the `/products/$id` route so each product page gets its own SEO metadata — title, description, image, and canonical URL — all derived from the loader data.
 
@@ -887,9 +963,11 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+<a id="phase-5"></a>
+
 ### Phase 5 — Streaming UI & Loading States
 
-- [x] **Step 1 — Suspense + `use` for streamed recommended products** ⚡
+- [x] <a id="p5-s1"></a>**Step 1 — Suspense + `use` for streamed recommended products** ⚡
 
   Added skeleton loading states to the product detail page using React 19's `use` hook, `<Suspense>`, and the shadcn/ui `Skeleton` component.
 
@@ -1007,9 +1085,11 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+<a id="phase-6"></a>
+
 ### Phase 6 — Create Product Form
 
-- [x] **Step 1 — Install TanStack Form** 📦
+- [x] <a id="p6-s1"></a>**Step 1 — Install TanStack Form** 📦
 
   ```bash
   npm i @tanstack/react-form
@@ -1017,7 +1097,7 @@ This is a living document. Each step gets checked off as it's done.
 
   TanStack Form is a headless, framework-agnostic form library. "Headless" means it manages **state and validation** but ships zero UI — you bring your own components. The key difference from something like React Hook Form: field state lives at the field level, not the form level. Each `<form.Field>` is its own subscriber and only re-renders itself when its value changes — the rest of the form stays untouched.
 
-- [x] **Step 2 — Install shadcn/ui form components** 🎨
+- [x] <a id="p6-s2"></a>**Step 2 — Install shadcn/ui form components** 🎨
 
   ```bash
   npx shadcn@latest add label input textarea select
@@ -1030,7 +1110,7 @@ This is a living document. Each step gets checked off as it's done.
   | `Textarea` | Styled multi-line `<textarea>`                         |
   | `Select`   | Accessible dropdown built on Radix UI's Select primitive |
 
-- [x] **Step 3 — Add `productSchema` and `createProduct` to `src/data/products.ts`** 🗄️
+- [x] <a id="p6-s3"></a>**Step 3 — Add `productSchema` and `createProduct` to `src/data/products.ts`** 🗄️
 
   The schema and the server function that writes to the DB both live in the data layer — next to the read functions already there.
 
@@ -1094,7 +1174,7 @@ This is a living document. Each step gets checked off as it's done.
   | `.handler`         | Receives clean, typed `data` — does the actual DB work                |
   | `.returning()`     | Drizzle returns the inserted row — required to get the generated `id` |
 
-- [x] **Step 4 — Create `src/routes/products/create-product.tsx`** 📝
+- [x] <a id="p6-s4"></a>**Step 4 — Create `src/routes/products/create-product.tsx`** 📝
 
   The create product route lives at `/products/create-product`. TanStack Router derives this from the file path automatically.
 
@@ -1276,9 +1356,11 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+<a id="phase-7"></a>
+
 ### Phase 7 — Cart Page
 
-- [x] **Step 1 — Add the `empty` shadcn/ui component** 📦
+- [x] <a id="p7-s1"></a>**Step 1 — Add the `empty` shadcn/ui component** 📦
 
   ```bash
   npx shadcn@latest add empty
@@ -1286,7 +1368,7 @@ This is a living document. Each step gets checked off as it's done.
 
   Used in the cart page to render the empty-state UI when there are no items in the cart.
 
-- [x] **Step 2 — Cart page layout with mock data** 🛒
+- [x] <a id="p7-s2"></a>**Step 2 — Cart page layout with mock data** 🛒
 
   Created `src/routes/cart.tsx` with the full layout: item list, quantity controls, order summary, and empty state — all wired to commented-out mock data so the shape is explicit:
 
@@ -1297,7 +1379,7 @@ This is a living document. Each step gets checked off as it's done.
   // ];
   ```
 
-- [x] **Step 3 — `addToCart`** ➕
+- [x] <a id="p7-s3"></a>**Step 3 — `addToCart`** ➕
 
   Created `src/data/cart.ts` with the first server function.
 
@@ -1307,7 +1389,7 @@ This is a living document. Each step gets checked off as it's done.
   4. **Button in `ProductCard`** — calls `addToCart({ data: { productId } })` with `e.preventDefault()` + `e.stopPropagation()` to avoid triggering the `<Link>` that wraps the card.
   5. **Router invalidation** — `router.invalidate()` after the call causes TanStack Router to re-run active loaders without a full page reload.
 
-- [x] **Step 4 — `fetchCartItems`** 📋
+- [x] <a id="p7-s4"></a>**Step 4 — `fetchCartItems`** 📋
 
   1. **Server function** — does an `innerJoin` between `cartItems` and `products`, then flattens the joined rows into a plain array for the client.
 
@@ -1324,7 +1406,7 @@ This is a living document. Each step gets checked off as it's done.
   3. **`Route.useLoaderData()`** inside `CartPage` — typed data available with no manual fetch.
   4. **Subtotal with `reduce`** — `price` comes as `string` from Drizzle's `numeric` type, so `Number(item.price) * item.quantity` converts it before summing.
 
-- [x] **Step 5 — `removeFromCart`** 🗑️
+- [x] <a id="p7-s5"></a>**Step 5 — `removeFromCart`** 🗑️
 
   ```ts
   export const removeFromCart = createServerFn({ method: "POST" })
@@ -1336,7 +1418,7 @@ This is a living document. Each step gets checked off as it's done.
 
   In the cart page, a `removingId` state tracks which item is being deleted so only that row's buttons disable — not the whole list. After deletion, `router.invalidate()` refreshes the list.
 
-- [x] **Step 6 — `updateCartQuantity`** ➕➖
+- [x] <a id="p7-s6"></a>**Step 6 — `updateCartQuantity`** ➕➖
 
   ```ts
   export const updateCartQuantity = createServerFn({ method: "POST" })
@@ -1355,7 +1437,7 @@ This is a living document. Each step gets checked off as it's done.
 
   In the cart page, an `isBusy` flag (`updatingId === item.id || removingId === item.id`) locks all three buttons of a row while any operation is in flight, preventing double-clicks and race conditions.
 
-- [x] **Step 7 — `clearCart`** 🧹
+- [x] <a id="p7-s7"></a>**Step 7 — `clearCart`** 🧹
 
   ```ts
   export const clearCart = createServerFn({ method: "POST" }).handler(
@@ -1367,7 +1449,7 @@ This is a living document. Each step gets checked off as it's done.
 
   The "Clear cart" button sets a `clearing` boolean, calls `clearCart()`, then calls `router.invalidate()`. The empty state renders automatically once the list comes back empty.
 
-- [x] **Step 8 — Cart badge in the Header** 🏷️
+- [x] <a id="p7-s8"></a>**Step 8 — Cart badge in the Header** 🏷️
 
   The Header needed to show the total item count and cost without loading the full cart data. Four pieces work together to make this happen.
 
