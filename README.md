@@ -1,10 +1,104 @@
-# StackShop 🛒
+# StackShop — Modern E-Commerce Platform 🛒
+
+> Built with TanStack Start · React 19 · Drizzle ORM · Supabase
 
 ---
 
 ## What is this?
 
 **StackShop** is a base project designed to serve as the foundation for any future e-commerce.
+
+---
+
+## 🛠️ Core Technologies
+
+| Layer | Technology |
+| --- | --- |
+| **Framework** | [TanStack Start](https://tanstack.com/start) — SSR-first React meta-framework powered by Nitro |
+| **Routing** | [TanStack Router](https://tanstack.com/router) — File-based, fully type-safe routing |
+| **Server State** | [TanStack Query](https://tanstack.com/query) — Client-side caching, background refetch |
+| **Forms** | [TanStack Form](https://tanstack.com/form) — Headless, field-level reactive forms |
+| **Database** | [PostgreSQL](https://www.postgresql.org/) via [Supabase](https://supabase.com/) |
+| **ORM** | [Drizzle ORM](https://orm.drizzle.team/) — Type-safe query builder + migrations |
+| **Styling** | [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
+| **Validation** | [Zod](https://zod.dev/) — Runtime schema validation |
+| **Language** | [TypeScript](https://www.typescriptlang.org/) 5.7 |
+| **Toolchain** | [Vite](https://vitejs.dev/) 8 + [Biome](https://biomejs.dev/) (lint & format) |
+
+---
+
+## 💫 Application Features
+
+- **Product catalog** — browsable grid with badges, ratings, reviews, and inventory status
+- **Product detail page** — SSR with dynamic metadata (`<head>`) per product
+- **Streaming UI** — recommended products load via React 19 `use()` + `<Suspense>` with skeleton fallback
+- **Create product form** — field-level Zod validation via TanStack Form, writes to the real DB
+- **Shopping cart** — add, remove, update quantity, clear cart; all persisted in PostgreSQL
+- **Cart badge in header** — live item count and total via `useQuery`, invalidated on every mutation
+- **Server Functions** — `createServerFn` for all data mutations (type-safe HTTP endpoints)
+- **Middleware** — server-side request logging via `createMiddleware` on the `/products` route
+- **Query caching** — `useQuery` with `initialData` from the loader; no duplicate network requests
+- **Selective SSR** — each route controls its own rendering strategy independently
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── components/
+│   ├── Header.tsx                  ← global nav + cart badge (useQuery)
+│   ├── ProductCard.tsx             ← card used in grids + add-to-cart button
+│   ├── RecommndedProducts.tsx      ← unwraps streamed Promise via use()
+│   └── ui/                         ← shadcn/ui primitives (button, card, input…)
+├── data/
+│   ├── products.ts                 ← getAllProducts · getProductById · createProduct
+│   └── cart.ts                     ← addToCart · fetchCartItems · removeFromCart · updateCartQuantity · clearCart · getCartItemsCount
+├── db/
+│   ├── index.ts                    ← Drizzle client + pg Pool
+│   ├── schema.ts                   ← products + cart_items tables, enums, inferred types
+│   └── seed.ts                     ← sample data (8 products)
+├── routes/
+│   ├── __root.tsx                  ← QueryClientProvider + Header + global shell
+│   ├── index.tsx                   ← / home (featured products, SSR loader)
+│   ├── cart.tsx                    ← /cart page
+│   └── products/
+│       ├── index.tsx               ← /products catalog (middleware + useQuery)
+│       ├── $id.tsx                 ← /products/:id detail + streaming recommended
+│       └── create-product.tsx      ← /products/create-product form
+└── router.tsx                      ← router + QueryClient context injection
+```
+
+---
+
+## 🗄️ Database Schema
+
+### `products`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key, auto-generated |
+| `name` | `varchar(256)` | Product name |
+| `description` | `text` | Full description |
+| `price` | `numeric(10,2)` | Stored as numeric, arrives as `string` |
+| `badge` | `enum` | `New` · `Sale` · `Featured` · `Limited` · `null` |
+| `rating` | `numeric(3,2)` | Default `0` |
+| `reviews` | `integer` | Default `0` |
+| `image` | `varchar(512)` | URL to product image |
+| `inventory` | `enum` | `in-stock` · `backorder` · `preorder` |
+| `created_at` | `timestamp` | Auto-set on insert |
+
+### `cart_items`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key, auto-generated |
+| `product_id` | `uuid` | FK → `products.id` (cascade delete) |
+| `quantity` | `integer` | Default `1` |
+| `created_at` | `timestamp` | Auto-set on insert |
+| `updated_at` | `timestamp` | Updated on quantity change |
+
+> Types are derived via Drizzle's `$inferSelect` / `$inferInsert` — no manual interfaces needed.
 
 ---
 
