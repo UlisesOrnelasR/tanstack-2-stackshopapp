@@ -9,12 +9,24 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
 import { Route as ProductsCreateProductRouteImport } from './routes/products/create-product'
 import { Route as ProductsIdRouteImport } from './routes/products/$id'
 
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CartRoute = CartRouteImport.update({
   id: '/cart',
   path: '/cart',
@@ -44,6 +56,8 @@ const ProductsIdRoute = ProductsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cart': typeof CartRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
   '/products/': typeof ProductsIndexRoute
@@ -51,6 +65,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cart': typeof CartRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
   '/products': typeof ProductsIndexRoute
@@ -59,6 +75,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/cart': typeof CartRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
   '/products/': typeof ProductsIndexRoute
@@ -68,15 +86,26 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/cart'
+    | '/sign-in'
+    | '/sign-up'
     | '/products/$id'
     | '/products/create-product'
     | '/products/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/cart' | '/products/$id' | '/products/create-product' | '/products'
+  to:
+    | '/'
+    | '/cart'
+    | '/sign-in'
+    | '/sign-up'
+    | '/products/$id'
+    | '/products/create-product'
+    | '/products'
   id:
     | '__root__'
     | '/'
     | '/cart'
+    | '/sign-in'
+    | '/sign-up'
     | '/products/$id'
     | '/products/create-product'
     | '/products/'
@@ -85,6 +114,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CartRoute: typeof CartRoute
+  SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
   ProductsIdRoute: typeof ProductsIdRoute
   ProductsCreateProductRoute: typeof ProductsCreateProductRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
@@ -92,6 +123,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cart': {
       id: '/cart'
       path: '/cart'
@@ -133,6 +178,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CartRoute: CartRoute,
+  SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
   ProductsIdRoute: ProductsIdRoute,
   ProductsCreateProductRoute: ProductsCreateProductRoute,
   ProductsIndexRoute: ProductsIndexRoute,
