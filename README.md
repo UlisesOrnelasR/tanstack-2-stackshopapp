@@ -58,6 +58,14 @@
   - [Step 6 — updateCartQuantity](#p7-s6)
   - [Step 7 — clearCart](#p7-s7)
   - [Step 8 — Cart badge in the Header](#p7-s8)
+- [🔐 Phase 8 — Authentication with Better Auth](#phase-8)
+  - [Step 1 — Auth UI pages (shadcn/ui)](#p8-s1)
+  - [Step 2 — Install better-auth](#p8-s2)
+  - [Step 3 — Environment variables](#p8-s3)
+  - [Step 4 — Create the auth instance](#p8-s4)
+  - [Step 5 — Generate & merge auth schema](#p8-s5)
+  - [Step 6 — Mount the API handler](#p8-s6)
+  - [Step 7 — Create the client instance](#p8-s7)
 
 ---
 
@@ -1540,6 +1548,150 @@ This is a living document. Each step gets checked off as it's done.
 
 ---
 
+---
+
+<a id="phase-8"></a>
+
+### Phase 8 — Authentication with Better Auth
+
+> This phase covers **installation and configuration only** — wiring `signIn`, `signUp`, and `useSession` into the actual UI will happen in the next phase.
+
+- [x] <a id="p8-s1"></a>**Step 1 — Auth UI pages (shadcn/ui)** 🎨
+
+  Add the pre-built auth form components from shadcn:
+
+  ```bash
+  npx shadcn@latest add login-01
+  npx shadcn@latest add signup-01
+  ```
+
+  Create two routes that render them:
+
+  ```
+  src/routes/
+  └── auth/
+      ├── sign-in.tsx    ← /auth/sign-in  (uses login-01 component)
+      └── sign-up.tsx    ← /auth/sign-up  (uses signup-01 component)
+  ```
+
+- [x] <a id="p8-s2"></a>**Step 2 — Install better-auth** 📦
+
+  ```bash
+  npm install better-auth
+  ```
+
+- [x] <a id="p8-s3"></a>**Step 3 — Environment variables** 🔐
+
+  Add to `.env` alongside the existing `DATABASE_URL`:
+
+  ```env
+  BETTER_AUTH_SECRET=MYtcOnjaZUdCXep01HdHEKcUVHrmZmQB
+  BETTER_AUTH_URL=http://localhost:3000
+  ```
+
+  | Variable | Purpose |
+  |---|---|
+  | `BETTER_AUTH_SECRET` | Signs and verifies session tokens |
+  | `BETTER_AUTH_URL` | Base URL used by Better Auth for redirects and callbacks |
+
+- [x] <a id="p8-s4"></a>**Step 4 — Create the auth instance** `src/lib/auth.ts` 🔧
+
+  Create `src/lib/auth.ts` and configure Better Auth with the Drizzle adapter:
+
+  ```ts
+  import { betterAuth } from "better-auth";
+  import { drizzleAdapter } from "better-auth/adapters/drizzle";
+  import { tanstackStartCookies } from "better-auth/tanstack-start";
+  import { db } from "@/db";
+
+  export const auth = betterAuth({
+    database: drizzleAdapter(db, {
+      provider: "pg",
+    }),
+    emailAndPassword: {
+      enabled: true,
+    },
+    plugins: [tanstackStartCookies()], // must be last in the array
+  });
+  ```
+
+  Since we're using Drizzle, the `DATABASE_URL` configured in [Phase 3 — Database Setup with Drizzle + Supabase](#phase-3) is reused automatically — no second connection needed.
+
+  **`tanstackStartCookies`** is required because TanStack Start handles cookies differently from a standard Node server. This plugin patches the response so that `Set-Cookie` headers from `signIn` / `signUp` are applied correctly. It must always be the **last plugin** in the array.
+
+- [x] <a id="p8-s5"></a>**Step 5 — Generate and merge the auth schema** 🗄️
+
+  Better Auth needs 4 tables in the database. Generate them with:
+
+  ```bash
+  npx auth@latest generate
+  ```
+
+  This creates `auth-schema.ts` with the `user`, `session`, `account`, and `verification` tables. **Copy the tables and imports into `src/db/schema.ts`, then delete `auth-schema.ts`.**
+
+  Push the new tables to Supabase:
+
+  ```bash
+  npm run db:push
+  ```
+
+  After this, the four auth tables appear in Supabase alongside `products` and `cart_items`.
+
+  | Table | Purpose |
+  |---|---|
+  | `user` | Registered user profiles |
+  | `session` | Active login sessions |
+  | `account` | Credential / OAuth provider links per user |
+  | `verification` | Email verification tokens |
+
+- [x] <a id="p8-s6"></a>**Step 6 — Mount the API handler** `src/routes/api/auth/$.ts` 🔌
+
+  Create `src/routes/api/auth/$.ts`. The `$` is a TanStack Router **catch-all segment** — it captures every request to `/api/auth/*` and passes it to Better Auth:
+
+  ```ts
+  import { createFileRoute } from "@tanstack/react-router";
+  import { auth } from "@/lib/auth";
+
+  export const Route = createFileRoute("/api/auth/$")({
+    server: {
+      handlers: {
+        GET: async ({ request }: { request: Request }) => {
+          return await auth.handler(request);
+        },
+        POST: async ({ request }: { request: Request }) => {
+          return await auth.handler(request);
+        },
+      },
+    },
+  });
+  ```
+
+  `auth.handler(request)` is Better Auth's internal router — it inspects the URL and dispatches to the right endpoint (`/sign-in`, `/sign-out`, `/session`, etc.).
+
+- [x] <a id="p8-s7"></a>**Step 7 — Create the client instance** `src/lib/auth-client.ts` 🖥️
+
+  Create `src/lib/auth-client.ts`. This runs in the browser and provides React hooks + methods to call the auth server:
+
+  ```ts
+  import { createAuthClient } from "better-auth/react";
+
+  export const authClient = createAuthClient({
+    baseURL: "http://localhost:3000",
+  });
+
+  export const { signIn, signUp, useSession } = createAuthClient();
+  ```
+
+  | Export | What it does |
+  |---|---|
+  | `signIn` | Signs in a user — `signIn.email({ email, password, callbackURL })` |
+  | `signUp` | Registers a user — `signUp.email({ name, email, password })` |
+  | `useSession` | React hook — returns `{ data: session, isPending, error }` |
+
+  That's it for setup. The next phase will wire these into the sign-in and sign-up forms.
+
+---
+
 ## Status
 
-> **Phase 7 — complete ✅**
+> **Phase 8 — complete ✅**
