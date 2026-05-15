@@ -67,6 +67,7 @@
     - [Step 5 — Generate & merge auth schema](#p8-s5)
     - [Step 6 — Mount the API handler](#p8-s6)
     - [Step 7 — Create the client instance](#p8-s7)
+    - [Step 8 — Register User](#p8-s8)
   - **Protecting Resources**
     - [Step 1 — Auth server functions](#p9-s1)
     - [Step 2 — Protect routes with `beforeLoad`](#p9-s2)
@@ -1726,6 +1727,86 @@ This is a living document. Each step gets checked off as it's done.
   | `useSession` | React hook — returns `{ data: session, isPending, error }` |
 
   That's it for setup. The next phase will wire these into the sign-in and sign-up forms.
+
+- [x] <a id="p8-s8"></a>**Step 8 — Register User** `src/components/signup-form.tsx` 👤
+
+  The signup form reuses the same patterns from Phase 6 (TanStack Form + Zod) and calls `signUp.email` from the auth client.
+
+  **`signupSchema` — cross-field validation with `.refine()`**
+
+  ```ts
+  const signupSchema = z
+    .object({
+      name: z.string().min(2, "Name must be at least 2 characters."),
+      email: z.string().email("Enter a valid email."),
+      password: z.string().min(8, "Password must be at least 8 characters."),
+      confirmPassword: z.string(),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: "Passwords do not match.",
+      path: ["confirmPassword"],
+    });
+  ```
+
+  `z.object()` validates each field in isolation. `.refine()` runs after and receives the whole object — that's how it can compare `password` and `confirmPassword`. The `path` tells Zod which field owns the error so it attaches to the right `<FieldMessage>`.
+
+  **`fieldValidator` and `FieldMessage`** — same helpers from Phase 6, reused without changes:
+
+  ```ts
+  // bridges Zod's safeParse result to TanStack Form's onChange API
+  function fieldValidator(schema: z.ZodTypeAny) {
+    return ({ value }: { value: unknown }) => {
+      const result = schema.safeParse(value);
+      return result.success ? undefined : result.error.issues[0]?.message;
+    };
+  }
+
+  // only renders when isTouched is true — no red errors on first load
+  function FieldMessage({ error }: { error?: string }) {
+    if (!error) return null;
+    return <p className="text-sm text-destructive">{error}</p>;
+  }
+  ```
+
+  **`confirmPassword` — reactive cross-field validation**
+
+  ```ts
+  validators={{
+    onChangeListenTo: ["password"],  // re-validates whenever password changes
+    onChange: ({ value, fieldApi }) => {
+      const password = fieldApi.form.getFieldValue("password");
+      return value !== password ? "Passwords do not match." : undefined;
+    },
+  }}
+  ```
+
+  Without `onChangeListenTo`, `confirmPassword` would only re-validate when the user types in its own field — fixing a typo in `password` wouldn't clear the mismatch error.
+
+  **`onSubmit` flow**
+
+  ```ts
+  onSubmit: async ({ value }) => {
+    const result = signupSchema.safeParse(value);   // 1. full object validation
+    if (!result.success) { setSubmitError(...); return; }
+
+    const response = await signUp.email({           // 2. Better Auth client call
+      name: value.name,
+      email: value.email,
+      password: value.password,
+    });
+
+    if (response.error) {                           // 3. Better Auth returns errors in the
+      setSubmitError(response.error.message);        //    response, not by throwing
+      return;
+    }
+
+    navigate({ to: "/" });                          // 4. success → redirect
+  }
+  ```
+
+  Better Auth's `signUp.email` doesn't throw on failure — it returns `{ error }`. Always check `response.error` explicitly before navigating.
+
+  > **Note:** `signUp.email` creates the account **and** establishes a session in a single call — no need to call `signIn` afterwards. The session cookie is set by the server response, so the user is already logged in by the time `navigate` runs.
 
 #### Protecting Resources
 
