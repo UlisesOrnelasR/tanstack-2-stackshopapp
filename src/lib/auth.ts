@@ -7,6 +7,15 @@ export const auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg", // or "mysql", "sqlite"
 	}),
+	user: {
+		additionalFields: {
+			role: {
+				type: "string",
+				required: true,
+				defaultValue: "user",
+			},
+		},
+	},
 	emailAndPassword: {
 		enabled: true,
 	},

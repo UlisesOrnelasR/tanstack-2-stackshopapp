@@ -32,9 +32,15 @@ import type { BadgeValue, InventoryValue } from "@/db/schema";
 export const Route = createFileRoute("/products/create-product")({
 	beforeLoad: async () => {
 		const session = await getSession();
+
 		if (!session) {
 			throw redirect({ to: "/sign-in" });
 		}
+
+		if (session.user.role !== "admin") {
+			throw redirect({ to: "/" });
+		}
+
 		return { user: session.user };
 	},
 	component: RouteComponent,

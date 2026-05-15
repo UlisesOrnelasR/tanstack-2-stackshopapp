@@ -14,6 +14,11 @@ import {
 
 const badgeValues = ["New", "Sale", "Featured", "Limited"] as const;
 const inventoryValues = ["in-stock", "backorder", "preorder"] as const;
+const roleValues = ["admin", "user"] as const;
+
+export const roleEnum = pgEnum("role", roleValues);
+
+export type RoleValue = (typeof roleValues)[number];
 
 export const badgeEnum = pgEnum("badge", badgeValues);
 export const inventoryEnum = pgEnum("inventory", inventoryValues);
@@ -60,10 +65,13 @@ export const user = pgTable("user", {
 	email: text("email").notNull().unique(),
 	emailVerified: boolean("email_verified").default(false).notNull(),
 	image: text("image"),
+
+	role: roleEnum("role").notNull().default("user"),
+
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")
 		.defaultNow()
-		.$onUpdate(() => /* @__PURE__ */ new Date())
+		.$onUpdate(() => new Date())
 		.notNull(),
 });
 

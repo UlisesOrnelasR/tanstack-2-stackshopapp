@@ -51,13 +51,8 @@ export default function Header() {
 						>
 							Products
 						</Link>
-						{session && (
-							<Link
-								to="/products/create-product"
-								className="rounded-lg px-3 py-1 transition hover:bg-slate-100 dark:hover:bg-slate-800"
-							>
-								Create Product
-							</Link>
+						{session?.user.role === "admin" && (
+							<Link to="/products/create-product">Create Product</Link>
 						)}
 					</nav>
 				</div>

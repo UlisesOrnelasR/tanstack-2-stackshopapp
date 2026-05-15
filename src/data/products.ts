@@ -66,6 +66,14 @@ export const createProduct = createServerFn({ method: "POST" })
 	)
 	.handler(async ({ data }): Promise<ProductSelect> => {
 		const { db } = await import("@/db");
+		// The following code checks if the user is logged in and is an admin
+		// But for the sake of simplicity, we're skipping it
+		// const session = await getSession();
+
+		// if (!session || session.user.role !== "admin") {
+		// 	throw new Error("Unauthorized");
+		// }
+
 		const result = await db
 			.insert(products)
 			.values({ ...data, badge: data.badge ?? null })

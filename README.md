@@ -1620,6 +1620,15 @@ This is a living document. Each step gets checked off as it's done.
     emailAndPassword: {
       enabled: true,
     },
+    user: {
+      additionalFields: {
+        role: {
+          type: "string",
+          required: true,
+          defaultValue: "user",
+        },
+      },
+    },
     plugins: [tanstackStartCookies()], // must be last in the array
   });
   ```
@@ -1637,6 +1646,25 @@ This is a living document. Each step gets checked off as it's done.
   ```
 
   This creates `auth-schema.ts` with the `user`, `session`, `account`, and `verification` tables. **Copy the tables and imports into `src/db/schema.ts`, then delete `auth-schema.ts`.**
+
+  Before pushing, add a `role` enum and wire it into the `user` table. Insert this **before the `user` table definition**:
+
+  ```ts
+  const roleValues = ["admin", "user"] as const;
+
+  export const roleEnum = pgEnum("role", roleValues);
+
+  export type RoleValue = (typeof roleValues)[number];
+  ```
+
+  Then add the `role` column inside the `user` table:
+
+  ```ts
+  export const user = pgTable("user", {
+    // ...generated columns...
+    role: roleEnum("role").notNull().default("user"),
+  });
+  ```
 
   Push the new tables to Supabase:
 
@@ -1731,12 +1759,15 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
 
 - [x] <a id="p9-s2"></a>**Step 2 — Protect routes with `beforeLoad`**
 
+  The `create-product` route is admin-only. `beforeLoad` checks both that a session exists and that the user has the `admin` role — anyone else gets redirected:
+
   ```ts
   // src/routes/products/create-product.tsx
   export const Route = createFileRoute("/products/create-product")({
     beforeLoad: async () => {
       const session = await getSession();
-      if (!session) throw redirect({ to: "/sign-in" });
+      if (!session) throw redirect({ to: "/auth/sign-in" });
+      if (session.user.role !== "admin") throw redirect({ to: "/" });
       return { user: session.user };
     },
     component: RouteComponent,
@@ -1745,7 +1776,9 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
 
   Use `throw redirect(...)` — not `return`. TanStack Router only acts on thrown values from `beforeLoad`. The returned object is merged into the route context and available via `Route.useRouteContext()`.
 
-- [x] <a id="p9-s3"></a>**Step 3 — Hide nav links by session**
+- [x] <a id="p9-s3"></a>**Step 3 — Hide nav links by role**
+
+  The "Create Product" link is only shown to admins:
 
   ```ts
   const { data: session } = useQuery({
@@ -1754,15 +1787,19 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
   });
 
   // In JSX:
-  {session && <Link to="/products/create-product">Create Product</Link>}
+  {session?.user.role === "admin" && (
+    <Link to="/products/create-product">Create Product</Link>
+  )}
   ```
 
   | Layer | What it does |
   |---|---|
-  | `{session && <Link>}` in Header | Hides the link — UX only |
-  | `beforeLoad` + `redirect` | Blocks the route — actual security boundary |
+  | `role === "admin"` in Header | Hides the link — UX only |
+  | `beforeLoad` + role check | Blocks the route — actual security boundary |
 
   Hiding the link is a UX improvement. The `beforeLoad` guard is the real protection — anyone can navigate directly via URL.
+
+  > **Note — server function protection (omitted for simplicity):** In a production app the server functions themselves (`getSession`, any mutation fn) should also validate the role server-side, so that a direct HTTP call bypasses the route guard. For the scope of this project we rely on the `beforeLoad` check only.
 
 ---
 
