@@ -72,6 +72,10 @@
     - [Step 1 — Auth server functions](#p9-s1)
     - [Step 2 — Protect routes with `beforeLoad`](#p9-s2)
     - [Step 3 — Hide nav links by session](#p9-s3)
+- [🔔 Phase 9 — Toast Notifications with Sonner](#phase-9)
+  - [Step 1 — Install Sonner](#p10-s1)
+  - [Step 2 — Mount the Toaster](#p10-s2)
+  - [Step 3 — Trigger toasts from components](#p10-s3)
 
 ---
 
@@ -1884,6 +1888,59 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
 
 ---
 
+<a id="phase-9"></a>
+
+### Phase 9 — Toast Notifications with Sonner
+
+- [x] <a id="p10-s1"></a>**Step 1 — Install Sonner** 📦
+
+  ```bash
+  npm install sonner
+  ```
+
+  Sonner is a lightweight, opinionated toast library for React. It ships its own `<Toaster>` provider and a standalone `toast` function — no context or hooks needed at the call site.
+
+- [x] <a id="p10-s2"></a>**Step 2 — Mount the Toaster** `src/routes/__root.tsx`
+
+  Import `Toaster` and render it once inside the root shell so it's available everywhere in the app:
+
+  ```tsx
+  import { Toaster } from 'sonner'
+
+  function RootDocument({ children }: { children: React.ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {/* ... existing shell ... */}
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+  ```
+
+  `<Toaster>` is a singleton — mount it once at the root and forget it. It renders a portal outside the normal React tree so toasts always appear on top regardless of z-index stacking.
+
+- [x] <a id="p10-s3"></a>**Step 3 — Trigger toasts from components** 🔔
+
+  Import the `toast` function directly where you need it — no hook, no context:
+
+  ```tsx
+  import { toast } from "sonner";
+
+  // Success toast after account creation
+  toast.success("Account created successfully.");
+  ```
+
+  Common variants:
+
+  | Call | When to use |
+  |---|---|
+  | `toast.success(msg)` | Mutation succeeded — user feedback |
+  | `toast.error(msg)` | Mutation failed — surface the error |
+  | `toast.loading(msg)` | Long async operation in flight |
+  | `toast(msg)` | Neutral / informational message |
+
+---
+
 ## Status
 
-> **Phase 8 — complete ✅**
+> **Phase 9 — complete ✅**

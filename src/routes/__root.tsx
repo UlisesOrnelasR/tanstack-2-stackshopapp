@@ -7,6 +7,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import { Toaster } from "sonner";
 import Header from "#/components/Header";
 import appCss from "../styles.css?url";
 
@@ -54,6 +55,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 						<Header />
 						<main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
 					</div>
+					<Toaster />
 					<TanStackDevtools
 						config={{
 							position: "bottom-right",

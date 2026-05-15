@@ -1,6 +1,7 @@
 import { useForm } from "@tanstack/react-form";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "#/components/ui/button";
 import {
@@ -75,9 +76,8 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
 					setSubmitError(response.error.message ?? "Could not create account.");
 					return;
 				}
-
+				toast.success("Account created successfully.");
 				navigate({ to: "/" });
-				alert("User created successfully");
 			} catch {
 				setSubmitError("Something went wrong. Please try again.");
 			}
