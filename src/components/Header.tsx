@@ -2,10 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag } from "lucide-react";
 import { getCartItemsCount } from "#/data/cart";
+import { getSession } from "#/lib/auth.functions";
 
 export const cartCountQueryKey = ["cart-count"] as const;
+export const sessionQueryKey = ["session"] as const;
 
 export default function Header() {
+	const { data: session } = useQuery({
+		queryKey: sessionQueryKey,
+		queryFn: () => getSession(),
+	});
+
 	const { data: cartSummary } = useQuery({
 		queryKey: cartCountQueryKey,
 		queryFn: () => getCartItemsCount(),
@@ -44,7 +51,14 @@ export default function Header() {
 						>
 							Products
 						</Link>
-						<Link to="/products/create-product">Create Product</Link>
+						{session && (
+							<Link
+								to="/products/create-product"
+								className="rounded-lg px-3 py-1 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+							>
+								Create Product
+							</Link>
+						)}
 					</nav>
 				</div>
 				<div className="flex items-center gap-2">

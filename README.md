@@ -59,13 +59,18 @@
   - [Step 7 — clearCart](#p7-s7)
   - [Step 8 — Cart badge in the Header](#p7-s8)
 - [🔐 Phase 8 — Authentication with Better Auth](#phase-8)
-  - [Step 1 — Auth UI pages (shadcn/ui)](#p8-s1)
-  - [Step 2 — Install better-auth](#p8-s2)
-  - [Step 3 — Environment variables](#p8-s3)
-  - [Step 4 — Create the auth instance](#p8-s4)
-  - [Step 5 — Generate & merge auth schema](#p8-s5)
-  - [Step 6 — Mount the API handler](#p8-s6)
-  - [Step 7 — Create the client instance](#p8-s7)
+  - **Installation**
+    - [Step 1 — Auth UI pages (shadcn/ui)](#p8-s1)
+    - [Step 2 — Install better-auth](#p8-s2)
+    - [Step 3 — Environment variables](#p8-s3)
+    - [Step 4 — Create the auth instance](#p8-s4)
+    - [Step 5 — Generate & merge auth schema](#p8-s5)
+    - [Step 6 — Mount the API handler](#p8-s6)
+    - [Step 7 — Create the client instance](#p8-s7)
+  - **Protecting Resources**
+    - [Step 1 — Auth server functions](#p9-s1)
+    - [Step 2 — Protect routes with `beforeLoad`](#p9-s2)
+    - [Step 3 — Hide nav links by session](#p9-s3)
 
 ---
 
@@ -127,6 +132,10 @@ src/
 ├── data/
 │   ├── products.ts                 ← getAllProducts · getProductById · createProduct
 │   └── cart.ts                     ← addToCart · fetchCartItems · removeFromCart · updateCartQuantity · clearCart · getCartItemsCount
+├── lib/
+│   ├── auth.ts                     ← Better Auth server instance (drizzle adapter + tanstackStartCookies)
+│   ├── auth-client.ts              ← Browser auth client (signIn · signUp · useSession)
+│   └── auth.functions.ts           ← getSession · ensureSession · sessionQueryKey
 ├── db/
 │   ├── index.ts                    ← Drizzle client + pg Pool
 │   ├── schema.ts                   ← products + cart_items tables, enums, inferred types
@@ -1689,6 +1698,71 @@ This is a living document. Each step gets checked off as it's done.
   | `useSession` | React hook — returns `{ data: session, isPending, error }` |
 
   That's it for setup. The next phase will wire these into the sign-in and sign-up forms.
+
+#### Protecting Resources
+
+Use `beforeLoad` with a server function to guard routes — runs on every navigation, including client-side `<Link>` transitions.
+
+- [x] <a id="p9-s1"></a>**Step 1 — Auth server functions** `src/lib/auth.functions.ts`
+
+  ```ts
+  import { createServerFn } from "@tanstack/react-start";
+  import { getRequestHeaders } from "@tanstack/react-start/server";
+  import { auth } from "@/lib/auth";
+
+  export const sessionQueryKey = ["session"] as const;
+
+  export const getSession = createServerFn({ method: "GET" }).handler(async () => {
+    return auth.api.getSession({ headers: getRequestHeaders() });
+  });
+
+  export const ensureSession = createServerFn({ method: "GET" }).handler(async () => {
+    const session = await auth.api.getSession({ headers: getRequestHeaders() });
+    if (!session) throw new Error("Unauthorized");
+    return session;
+  });
+  ```
+
+  | Function | Returns | Use case |
+  |---|---|---|
+  | `getSession` | `session \| null` | Conditional UI — show/hide based on auth state |
+  | `ensureSession` | `session` (throws if missing) | `beforeLoad` — block unauthenticated access |
+  | `sessionQueryKey` | `["session"]` | Shared cache key for TanStack Query |
+
+- [x] <a id="p9-s2"></a>**Step 2 — Protect routes with `beforeLoad`**
+
+  ```ts
+  // src/routes/products/create-product.tsx
+  export const Route = createFileRoute("/products/create-product")({
+    beforeLoad: async () => {
+      const session = await getSession();
+      if (!session) throw redirect({ to: "/sign-in" });
+      return { user: session.user };
+    },
+    component: RouteComponent,
+  });
+  ```
+
+  Use `throw redirect(...)` — not `return`. TanStack Router only acts on thrown values from `beforeLoad`. The returned object is merged into the route context and available via `Route.useRouteContext()`.
+
+- [x] <a id="p9-s3"></a>**Step 3 — Hide nav links by session**
+
+  ```ts
+  const { data: session } = useQuery({
+    queryKey: sessionQueryKey,
+    queryFn: () => getSession(),
+  });
+
+  // In JSX:
+  {session && <Link to="/products/create-product">Create Product</Link>}
+  ```
+
+  | Layer | What it does |
+  |---|---|
+  | `{session && <Link>}` in Header | Hides the link — UX only |
+  | `beforeLoad` + `redirect` | Blocks the route — actual security boundary |
+
+  Hiding the link is a UX improvement. The `beforeLoad` guard is the real protection — anyone can navigate directly via URL.
 
 ---
 
