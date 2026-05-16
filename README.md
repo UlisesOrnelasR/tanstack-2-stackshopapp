@@ -68,6 +68,8 @@
     - [Step 6 — Mount the API handler](#p8-s6)
     - [Step 7 — Create the client instance](#p8-s7)
     - [Step 8 — Register User](#p8-s8)
+  - **Login**
+    - [Step 9 — Login User](#p8-s9)
   - **Protecting Resources**
     - [Step 1 — Auth server functions](#p9-s1)
     - [Step 2 — Protect routes with `beforeLoad`](#p9-s2)
@@ -1817,6 +1819,48 @@ This is a living document. Each step gets checked off as it's done.
   Better Auth's `signUp.email` doesn't throw on failure — it returns `{ error }`. Always check `response.error` explicitly before navigating.
 
   > **Note:** `signUp.email` creates the account **and** establishes a session in a single call — no need to call `signIn` afterwards. `router.invalidate()` re-runs `__root.tsx` `beforeLoad`, which re-fetches the session server-side and propagates it through context so the Header updates immediately.
+
+- [x] <a id="p8-s9"></a>**Step 9 — Login User** `src/components/login-form.tsx` 🔑
+
+  The login form follows the same TanStack Form + Zod pattern as the signup form, but is simpler — no cross-field validation needed.
+
+  **`loginSchema`**
+
+  ```ts
+  const loginSchema = z.object({
+    email: z.string().email("Enter a valid email."),
+    password: z.string().min(8, "Password must be at least 8 characters."),
+  });
+  ```
+
+  **`onSubmit` flow**
+
+  ```ts
+  onSubmit: async ({ value }) => {
+    const response = await signIn.email({   // 1. Better Auth client call
+      email: value.email,
+      password: value.password,
+    });
+
+    if (response.error) {                   // 2. errors come in the response, not via throw
+      setSubmitError(response.error.message ?? "Could not login.");
+      return;
+    }
+
+    await router.invalidate();              // 3. re-runs __root beforeLoad → session in context updates
+    toast.success("Logged in successfully.");
+    navigate({ to: "/" });                  // 4. success → redirect
+  }
+  ```
+
+  The key difference from signup: `signIn.email` does **not** create a new session automatically if one already exists — it replaces it. `router.invalidate()` is still required to propagate the new session through root context so the Header updates immediately.
+
+  | Step | What happens |
+  |---|---|
+  | `signIn.email(...)` | Better Auth validates credentials and issues a session cookie |
+  | `response.error` check | Surfaces wrong password / unknown email without throwing |
+  | `router.invalidate()` | Re-runs `__root` `beforeLoad` → session flows into Header and all routes |
+  | `navigate({ to: "/" })` | Redirects to home after successful login |
 
 #### Protecting Resources
 
