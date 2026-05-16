@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { getSession } from "#/lib/auth.functions";
 import { type ProductSelect, products } from "@/db/schema";
 
 export const getAllProducts = createServerFn({ method: "GET" }).handler(
@@ -65,15 +66,15 @@ export const createProduct = createServerFn({ method: "POST" })
 		productSchema.parse(data),
 	)
 	.handler(async ({ data }): Promise<ProductSelect> => {
+		const session = await getSession();
+		if (!session) {
+			throw new Error("Unauthorized");
+		}
+
+		if (session.user.role !== "admin") {
+			throw new Error("Forbidden");
+		}
 		const { db } = await import("@/db");
-		// The following code checks if the user is logged in and is an admin
-		// But for the sake of simplicity, we're skipping it
-		// const session = await getSession();
-
-		// if (!session || session.user.role !== "admin") {
-		// 	throw new Error("Unauthorized");
-		// }
-
 		const result = await db
 			.insert(products)
 			.values({ ...data, badge: data.badge ?? null })

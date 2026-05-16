@@ -73,13 +73,14 @@
     - [Step 9 — Login User](#p8-s9)
   - **Sign Out**
     - [Step 10 — Sign Out](#p8-s10)
+  - **Cache & Session Sync**
+    - [Step 1 — Session in root context & `router.invalidate()`](#p9-s5)
   - **Protecting Resources**
     - [Step 1 — Auth server functions](#p9-s1)
     - [Step 2 — Protect routes with `beforeLoad`](#p9-s2)
-    - [Step 3 — Hide nav links by session](#p9-s3)
+    - [Step 3 — Hide nav links by role](#p9-s3)
     - [Step 4 — Adaptive Header & user dropdown](#p9-s4)
-  - **Cache & Session Sync**
-    - [Step 5 — Session in root context & `router.invalidate()`](#p9-s5)
+    - [Step 5 — Protect the server function](#p9-s6)
 - [🔔 Phase 9 — Toast Notifications with Sonner](#phase-9)
   - [Step 1 — Install Sonner](#p10-s1)
   - [Step 2 — Mount the Toaster](#p10-s2)
@@ -1799,27 +1800,36 @@ This is a living document. Each step gets checked off as it's done.
 
   ```ts
   onSubmit: async ({ value }) => {
-    const result = signupSchema.safeParse(value);   // 1. full object validation
-    if (!result.success) { setSubmitError(...); return; }
+    const result = signupSchema.safeParse(value);
 
-    const response = await signUp.email({           // 2. Better Auth client call
-      name: value.name,
-      email: value.email,
-      password: value.password,
-    });
-
-    if (response.error) {                           // 3. Better Auth returns errors in the
-      setSubmitError(response.error.message);        //    response, not by throwing
+    if (!result.success) {
+      setSubmitError(result.error.issues[0]?.message ?? "Invalid form.");
       return;
     }
 
-    await router.invalidate();                      // 4. re-runs __root beforeLoad → session in context updates
-    toast.success("Account created successfully."); // 5. user feedback
-    navigate({ to: "/" });                          // 6. success → redirect
-  }
+    try {
+      setSubmitError(null);
+
+      const response = await signUp.email({
+        name: value.name,
+        email: value.email,
+        password: value.password,
+      });
+
+      if (response.error) {
+        setSubmitError(response.error.message ?? "Could not create account.");
+        return;
+      }
+      await router.invalidate(); // Re-run __root beforeLoad to refresh the global session
+      toast.success("Account created successfully.");
+      navigate({ to: "/" });
+    } catch {
+      setSubmitError("Something went wrong. Please try again.");
+    }
+  },
   ```
 
-  Better Auth's `signUp.email` doesn't throw on failure — it returns `{ error }`. Always check `response.error` explicitly before navigating.
+  The `onSubmit` runs only after TanStack Form's field-level validators pass. Then it does a second full `signupSchema.safeParse(value)` — this catches the cross-field `.refine()` (password match) which can't run at the field level. The `try/catch` wraps everything: `setSubmitError(null)` clears any previous error, `signUp.email` is called, and if `response.error` is set (Better Auth never throws — it always returns `{ error }`), the error message is surfaced. The `catch` block handles unexpected network failures as a fallback.
 
   > **Note:** `signUp.email` creates the account **and** establishes a session in a single call — no need to call `signIn` afterwards. `router.invalidate()` re-runs `__root.tsx` `beforeLoad`, which re-fetches the session server-side and propagates it through context so the Header updates immediately.
 
@@ -1840,23 +1850,35 @@ This is a living document. Each step gets checked off as it's done.
 
   ```ts
   onSubmit: async ({ value }) => {
-    const response = await signIn.email({   // 1. Better Auth client call
-      email: value.email,
-      password: value.password,
-    });
+    const result = loginSchema.safeParse(value);
 
-    if (response.error) {                   // 2. errors come in the response, not via throw
-      setSubmitError(response.error.message ?? "Could not login.");
+    if (!result.success) {
+      setSubmitError(result.error.issues[0]?.message ?? "Invalid form.");
       return;
     }
 
-    await router.invalidate();              // 3. re-runs __root beforeLoad → session in context updates
-    toast.success("Logged in successfully.");
-    navigate({ to: "/" });                  // 4. success → redirect
-  }
+    try {
+      setSubmitError(null);
+
+      const response = await signIn.email({
+        email: value.email,
+        password: value.password,
+      });
+
+      if (response.error) {
+        setSubmitError(response.error.message ?? "Could not login.");
+        return;
+      }
+      await router.invalidate(); // Re-run __root beforeLoad to refresh the global session
+      toast.success("Logged in successfully.");
+      navigate({ to: "/" });
+    } catch {
+      setSubmitError("Something went wrong. Please try again.");
+    }
+  },
   ```
 
-  The key difference from signup: `signIn.email` does **not** create a new session automatically if one already exists — it replaces it. `router.invalidate()` is still required to propagate the new session through root context so the Header updates immediately.
+  Same structure as signup: `loginSchema.safeParse(value)` runs first as a safety net (TanStack Form's field validators already ran, but this ensures a clean typed result before the network call). `setSubmitError(null)` clears any previous error, then `signIn.email` is called — Better Auth returns `{ error }` on failure, never throws. If `response.error` is set, the message is surfaced. The `catch` handles unexpected failures. On success, `router.invalidate()` re-runs `__root` `beforeLoad`, which re-fetches the session server-side and propagates it through context so the Header switches to the authenticated state immediately.
 
   | Step | What happens |
   |---|---|
@@ -1886,9 +1908,45 @@ This is a living document. Each step gets checked off as it's done.
 
   `signOut` accepts `fetchOptions.onSuccess` instead of returning a promise — the callback runs only when the server confirms the session was destroyed. `router.invalidate()` then re-runs `__root` `beforeLoad`, which re-fetches the session (now `null`) and propagates it through context so the Header switches to the unauthenticated state immediately.
 
+#### Cache & Session Sync
+
+- [x] <a id="p9-s5"></a>**Step 5 — Session in root context & `router.invalidate()` for sync**
+
+  Instead of fetching the session in every route or component that needs it, it's fetched **once** in `__root.tsx` `beforeLoad` and shared globally via route context:
+
+  ```ts
+  // src/routes/__root.tsx
+  beforeLoad: async () => {
+    const session = await getSession();
+    return { session };
+  },
+  ```
+
+  Every child route and component reads the same resolved value — no extra network call per route:
+
+  ```ts
+  // Header.tsx, create-product.tsx, any child route
+  const { session } = RootRoute.useRouteContext();
+  ```
+
+  Both signup and logout call `router.invalidate()` after their operation. This re-runs `beforeLoad` across the entire route tree, re-fetching the session server-side and propagating it through context:
+
+  ```ts
+  // After signUp.email succeeds (signup-form.tsx)
+  await router.invalidate(); // beforeLoad runs → picks up new session
+
+  // After signOut succeeds (Header.tsx)
+  await router.invalidate(); // beforeLoad runs → session is now null
+  ```
+
+  | Action | Result |
+  |---|---|
+  | Sign up | `router.invalidate()` → `beforeLoad` re-fetches → Header switches to authenticated state |
+  | Log out | `router.invalidate()` → `beforeLoad` re-fetches → Header switches to unauthenticated state |
+
 #### Protecting Resources
 
-Use `beforeLoad` with a server function to guard routes — runs on every navigation, including client-side `<Link>` transitions.
+Use `beforeLoad` to guard routes — runs on every navigation, including client-side `<Link>` transitions. Since `__root.tsx` already resolved the session in context, child routes read from `context.session` directly — no extra `getSession()` call per route.
 
 - [x] <a id="p9-s1"></a>**Step 1 — Auth server functions** `src/lib/auth.functions.ts`
 
@@ -1912,20 +1970,20 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
 
   | Function | Returns | Use case |
   |---|---|---|
-  | `getSession` | `session \| null` | Conditional UI — show/hide based on auth state |
-  | `ensureSession` | `session` (throws if missing) | `beforeLoad` — block unauthenticated access |
+  | `getSession` | `session \| null` | Read session anywhere — loaders, server functions, `beforeLoad` |
+  | `ensureSession` | `session` (throws if missing) | Alternative guard — throws directly instead of redirecting |
   | `sessionQueryKey` | `["session"]` | Shared cache key for TanStack Query |
 
 - [x] <a id="p9-s2"></a>**Step 2 — Protect routes with `beforeLoad`**
 
-  The `create-product` route is admin-only. `beforeLoad` checks both that a session exists and that the user has the `admin` role — anyone else gets redirected:
+  The `create-product` route is admin-only. Because `__root.tsx` already fetched the session in its own `beforeLoad` and put it in context, child routes just read `context.session` — no duplicate network call:
 
   ```ts
   // src/routes/products/create-product.tsx
   export const Route = createFileRoute("/products/create-product")({
-    beforeLoad: async () => {
-      const session = await getSession();
-      if (!session) throw redirect({ to: "/auth/sign-in" });
+    beforeLoad: async ({ context }) => {
+      const session = context.session; // already resolved by __root.tsx beforeLoad
+      if (!session) throw redirect({ to: "/sign-in" });
       if (session.user.role !== "admin") throw redirect({ to: "/" });
       return { user: session.user };
     },
@@ -1954,8 +2012,6 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
   | `beforeLoad` + role check | Blocks the route — actual security boundary |
 
   Hiding the link is a UX improvement. The `beforeLoad` guard is the real protection — anyone can navigate directly via URL.
-
-  > **Note — server function protection (omitted for simplicity):** In a production app the server functions themselves (`getSession`, any mutation fn) should also validate the role server-side, so that a direct HTTP call bypasses the route guard. For the scope of this project we rely on the `beforeLoad` check only.
 
 - [x] <a id="p9-s4"></a>**Step 4 — Adaptive Header & user dropdown** 👤
 
@@ -2004,7 +2060,7 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
   )}
   ```
 
-  Both signup and logout call `router.invalidate()` after their operation — see [Step 5](#p9-s5).
+  Both signup and logout call `router.invalidate()` after their operation — see [Cache & Session Sync](#p9-s5).
 
   | Dropdown item | Visible to |
   |---|---|
@@ -2015,38 +2071,41 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
 
   The "Create Product" link inside the dropdown mirrors the `beforeLoad` guard on the route — it's a UX convenience, not a security boundary.
 
-- [x] <a id="p9-s5"></a>**Step 5 — Session in root context & `router.invalidate()` for sync**
+- [x] <a id="p9-s6"></a>**Step 5 — Protect the server function**
 
-  Instead of fetching the session inside the Header with `useQuery`, it's fetched once in `__root.tsx` `beforeLoad` and shared globally via route context:
+  Hiding the link and blocking the route are UX measures — a determined user can still send a raw `POST` directly to the server function endpoint, bypassing both. The server function itself must be the final authority.
 
-  ```ts
-  // src/routes/__root.tsx
-  beforeLoad: async () => {
-    const session = await getSession();
-    return { session };
-  },
-  ```
-
-  The Header reads it with no query involved:
+  `createProduct` re-validates the session independently, server-side, before touching the database:
 
   ```ts
-  const { session } = RootRoute.useRouteContext();
+  // src/data/products.ts
+  export const createProduct = createServerFn({ method: "POST" })
+    .inputValidator((data: z.infer<typeof productSchema>) =>
+      productSchema.parse(data),
+    )
+    .handler(async ({ data }): Promise<ProductSelect> => {
+      const session = await getSession(); // fresh server-side check — no context here
+      if (!session) throw new Error("Unauthorized");
+      if (session.user.role !== "admin") throw new Error("Forbidden");
+
+      const { db } = await import("@/db");
+      const result = await db
+        .insert(products)
+        .values({ ...data, badge: data.badge ?? null })
+        .returning();
+      // ...
+    });
   ```
 
-  Both signup and logout call `router.invalidate()` after their operation. This re-runs `beforeLoad` across the entire route tree, which re-fetches the session server-side and propagates it through context:
+  This gives three independent layers of protection for `createProduct`:
 
-  ```ts
-  // After signUp.email succeeds (signup-form.tsx)
-  await router.invalidate(); // beforeLoad runs → picks up new session
+  | Layer | Where | What it does |
+  |---|---|---|
+  | **UI permissions** | `Header.tsx` | Hides the "Create Product" link unless `session?.user.role === "admin"` |
+  | **Route permissions** | `create-product.tsx` `beforeLoad` | Reads `context.session` — redirects to `/` or `/sign-in` before the page renders |
+  | **Server authorization** | `createProduct` handler | Calls `getSession()` directly — throws `Unauthorized` / `Forbidden` if the request bypasses the UI and route guards |
 
-  // After signOut succeeds (Header.tsx)
-  await router.invalidate(); // beforeLoad runs → session is now null
-  ```
-
-  | Action | Result |
-  |---|---|
-  | Sign up | `router.invalidate()` → `beforeLoad` re-fetches → Header switches to authenticated state |
-  | Log out | `router.invalidate()` → `beforeLoad` re-fetches → Header switches to unauthenticated state |
+  The route guard stops most users. The server-side check stops everyone else.
 
 ---
 
@@ -2105,4 +2164,4 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
 
 ## Status
 
-> **Phase 9 — complete ✅** (includes session in `__root.tsx` context · `router.invalidate()` for signup and logout sync)
+> **Phase 9 — complete ✅** (includes session in `__root.tsx` context · `router.invalidate()` for signup and logout sync · three-layer server function protection)

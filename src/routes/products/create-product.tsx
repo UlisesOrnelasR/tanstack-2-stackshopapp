@@ -7,7 +7,6 @@ import {
 } from "@tanstack/react-router";
 import { useState } from "react";
 import type { z } from "zod";
-import { getSession } from "#/lib/auth.functions";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -30,8 +29,8 @@ import { createProduct, productSchema } from "@/data/products";
 import type { BadgeValue, InventoryValue } from "@/db/schema";
 
 export const Route = createFileRoute("/products/create-product")({
-	beforeLoad: async () => {
-		const session = await getSession();
+	beforeLoad: async ({ context }) => {
+		const session = context.session;
 
 		if (!session) {
 			throw redirect({ to: "/sign-in" });
