@@ -73,6 +73,9 @@
     - [Step 2 — Protect routes with `beforeLoad`](#p9-s2)
     - [Step 3 — Hide nav links by session](#p9-s3)
     - [Step 4 — Adaptive Header & user dropdown](#p9-s4)
+  - **Cache & Session Sync**
+    - [Step 5 — invalidateQueries on signup](#p9-s5)
+    - [Step 6 — signOut + setQueryData on logout](#p9-s6)
 - [🔔 Phase 9 — Toast Notifications with Sonner](#phase-9)
   - [Step 1 — Install Sonner](#p10-s1)
   - [Step 2 — Mount the Toaster](#p10-s2)
@@ -1722,7 +1725,7 @@ This is a living document. Each step gets checked off as it's done.
     baseURL: "http://localhost:3000",
   });
 
-  export const { signIn, signUp, useSession } = createAuthClient();
+  export const { signIn, signUp, useSession, signOut } = authClient;
   ```
 
   | Export | What it does |
@@ -1730,6 +1733,7 @@ This is a living document. Each step gets checked off as it's done.
   | `signIn` | Signs in a user — `signIn.email({ email, password, callbackURL })` |
   | `signUp` | Registers a user — `signUp.email({ name, email, password })` |
   | `useSession` | React hook — returns `{ data: session, isPending, error }` |
+  | `signOut` | Signs out the current user — accepts `fetchOptions` with callbacks |
 
   That's it for setup. The next phase will wire these into the sign-in and sign-up forms.
 
@@ -1805,11 +1809,20 @@ This is a living document. Each step gets checked off as it's done.
       return;
     }
 
-    navigate({ to: "/" });                          // 4. success → redirect
+    await queryClient.invalidateQueries({           // 4. force the session query to refetch
+      queryKey: sessionQueryKey,                    //    so the Header re-renders immediately
+    });                                             //    showing the authenticated state
+
+    toast.success("Account created successfully."); // 5. user feedback
+    navigate({ to: "/" });                          // 6. success → redirect
   }
   ```
 
   Better Auth's `signUp.email` doesn't throw on failure — it returns `{ error }`. Always check `response.error` explicitly before navigating.
+
+  **Why `invalidateQueries` after signup?**
+
+  The Header holds a `useQuery` that fetches the session via `getSession()`. When registration succeeds, the server sets the session cookie — but the Header's cached result still says "no session." Calling `queryClient.invalidateQueries({ queryKey: sessionQueryKey })` marks that cache entry as stale and triggers a refetch. The Header re-renders with the authenticated state (user avatar, dropdown) instantly — no page reload, no flicker.
 
   > **Note:** `signUp.email` creates the account **and** establishes a session in a single call — no need to call `signIn` afterwards. The session cookie is set by the server response, so the user is already logged in by the time `navigate` runs.
 
@@ -1902,6 +1915,21 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
 
   ```tsx
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          navigate({ to: "/" });                              // 1. redirect home
+          setIsUserMenuOpen(false);                           // 2. close dropdown
+          queryClient.setQueryData(sessionQueryKey, null);    // 3. clear session cache immediately
+          toast.success("Logged out successfully.");          // 4. user feedback
+        },
+      },
+    });
+  };
 
   <button onClick={() => setIsUserMenuOpen((prev) => !prev)}>
     <User size={18} />
@@ -1914,12 +1942,21 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
       {session?.user.role === "admin" && (
         <Link to="/products/create-product">Create Product</Link>
       )}
-      <button onClick={() => toast.success("Logged out successfully.")}>
-        Log out
-      </button>
+      <button onClick={handleLogout}>Log out</button>
     </div>
   )}
   ```
+
+  **Why `setQueryData` instead of `invalidateQueries` on logout?**
+
+  On logout you don't want to refetch — you want to **clear** the cache synchronously. `setQueryData(sessionQueryKey, null)` writes `null` into the cache right away so the Header switches to the unauthenticated state the moment `onSuccess` fires, before any network round-trip. `invalidateQueries` would mark the entry stale and schedule a refetch, which means the dropdown would still show the user's name for a brief moment while the refetch is in flight.
+
+  On **signup**, the opposite is true: you want to force a refetch because the server just created a new session that your client cache doesn't know about. That's why signup uses `invalidateQueries` — it triggers `getSession()` again and the Header receives the fresh session data.
+
+  | Action | Cache strategy | Why |
+  |---|---|---|
+  | Sign up | `invalidateQueries` | Session was just created — refetch to get it |
+  | Log out | `setQueryData(null)` | Session was just destroyed — clear instantly, no refetch needed |
 
   | Dropdown item | Visible to |
   |---|---|
@@ -1929,6 +1966,27 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
   | Log out | All authenticated users |
 
   The "Create Product" link inside the dropdown mirrors the `beforeLoad` guard on the route — it's a UX convenience, not a security boundary.
+
+- [x] <a id="p9-s5"></a>**Step 5 — `invalidateQueries` on signup**
+
+  After `signUp.email` succeeds, the server has set a session cookie but the Header's cache still says "no session." Invalidating the query forces a refetch so the Header switches to the authenticated state immediately:
+
+  ```ts
+  await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+  ```
+
+- [x] <a id="p9-s6"></a>**Step 6 — `signOut` + `setQueryData` on logout**
+
+  On logout, the session is already gone — no need to refetch. `setQueryData` wipes the cache synchronously so the Header switches to the unauthenticated state the instant `onSuccess` fires:
+
+  ```ts
+  queryClient.setQueryData(sessionQueryKey, null);
+  ```
+
+  | Action | Method | Why |
+  |---|---|---|
+  | Sign up | `invalidateQueries` | Session just created — need to fetch it |
+  | Log out | `setQueryData(null)` | Session destroyed — clear instantly |
 
 ---
 
@@ -1987,4 +2045,4 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
 
 ## Status
 
-> **Phase 9 — complete ✅**
+> **Phase 9 — complete ✅** (includes cache sync: `invalidateQueries` on signup · `setQueryData` + `signOut` on logout)

@@ -1,16 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ShoppingBag, User } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getCartItemsCount } from "#/data/cart";
 import { getSession } from "#/lib/auth.functions";
+import { signOut } from "#/lib/auth-client";
 
 export const cartCountQueryKey = ["cart-count"] as const;
 export const sessionQueryKey = ["session"] as const;
 
 export default function Header() {
 	const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+	const queryClient = useQueryClient();
+
+	const navigate = useNavigate();
 
 	const { data: session } = useQuery({
 		queryKey: sessionQueryKey,
@@ -25,6 +29,21 @@ export default function Header() {
 
 	const itemCount = cartSummary?.count ?? 0;
 	const total = cartSummary?.total ?? 0;
+
+	const handleLogout = async () => {
+		await signOut({
+			fetchOptions: {
+				onSuccess: () => {
+					navigate({ to: "/" }); // Redirect to home
+					setIsUserMenuOpen(false); // Close dropdown
+					queryClient.setQueryData(sessionQueryKey, null); // Clear session cache inmediately
+					toast.success("Logged out successfully.", {
+						description: "Mock logout for now.",
+					});
+				},
+			},
+		});
+	};
 
 	return (
 		<header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
@@ -116,11 +135,7 @@ export default function Header() {
 									<button
 										type="button"
 										onClick={() => {
-											setIsUserMenuOpen(false);
-
-											toast.success("Logged out successfully.", {
-												description: "Mock logout for now.",
-											});
+											handleLogout();
 										}}
 										className="mt-2 block w-full rounded-lg px-3 py-2 text-left text-sm text-red-500 transition hover:bg-red-50 dark:hover:bg-red-950/30"
 									>

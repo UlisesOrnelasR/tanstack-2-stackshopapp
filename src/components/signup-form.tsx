@@ -1,4 +1,5 @@
 import { useForm } from "@tanstack/react-form";
+import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ import {
 } from "#/components/ui/field";
 import { Input } from "#/components/ui/input";
 import { signUp } from "#/lib/auth-client";
+import { sessionQueryKey } from "./Header";
 
 const signupSchema = z
 	.object({
@@ -46,6 +48,7 @@ function FieldMessage({ error }: { error?: string }) {
 
 export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
 	const navigate = useNavigate();
+	const queryClient = useQueryClient();
 	const [submitError, setSubmitError] = useState<string | null>(null);
 
 	const form = useForm({
@@ -76,6 +79,9 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
 					setSubmitError(response.error.message ?? "Could not create account.");
 					return;
 				}
+				await queryClient.invalidateQueries({
+					queryKey: sessionQueryKey,
+				}); // update session cache
 				toast.success("Account created successfully.");
 				navigate({ to: "/" });
 			} catch {
