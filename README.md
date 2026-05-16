@@ -67,9 +67,12 @@
     - [Step 5 — Generate & merge auth schema](#p8-s5)
     - [Step 6 — Mount the API handler](#p8-s6)
     - [Step 7 — Create the client instance](#p8-s7)
+  - **Register**
     - [Step 8 — Register User](#p8-s8)
   - **Login**
     - [Step 9 — Login User](#p8-s9)
+  - **Sign Out**
+    - [Step 10 — Sign Out](#p8-s10)
   - **Protecting Resources**
     - [Step 1 — Auth server functions](#p9-s1)
     - [Step 2 — Protect routes with `beforeLoad`](#p9-s2)
@@ -1861,6 +1864,27 @@ This is a living document. Each step gets checked off as it's done.
   | `response.error` check | Surfaces wrong password / unknown email without throwing |
   | `router.invalidate()` | Re-runs `__root` `beforeLoad` → session flows into Header and all routes |
   | `navigate({ to: "/" })` | Redirects to home after successful login |
+
+- [x] <a id="p8-s10"></a>**Step 10 — Sign Out** `src/components/Header.tsx` 🚪
+
+  Sign out is handled directly inside the Header via `signOut` from the auth client.
+
+  ```ts
+  const handleLogout = async () => {
+    await signOut({
+      fetchOptions: {
+        onSuccess: async () => {
+          await router.invalidate(); // re-runs __root beforeLoad → session becomes null in context
+          navigate({ to: "/" });
+          setIsUserMenuOpen(false);
+          toast.success("Logged out successfully.");
+        },
+      },
+    });
+  };
+  ```
+
+  `signOut` accepts `fetchOptions.onSuccess` instead of returning a promise — the callback runs only when the server confirms the session was destroyed. `router.invalidate()` then re-runs `__root` `beforeLoad`, which re-fetches the session (now `null`) and propagates it through context so the Header switches to the unauthenticated state immediately.
 
 #### Protecting Resources
 
