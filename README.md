@@ -1910,7 +1910,7 @@ This is a living document. Each step gets checked off as it's done.
 
 #### Cache & Session Sync
 
-- [x] <a id="p9-s5"></a>**Step 5 — Session in root context & `router.invalidate()` for sync**
+- [x] <a id="p9-s5"></a>**Step 1 — Session in root context & `router.invalidate()` for sync**
 
   Instead of fetching the session in every route or component that needs it, it's fetched **once** in `__root.tsx` `beforeLoad` and shared globally via route context:
 
