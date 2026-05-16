@@ -1925,7 +1925,8 @@ This is a living document. Each step gets checked off as it's done.
   Every child route and component reads the same resolved value — no extra network call per route:
 
   ```ts
-  // Header.tsx, create-product.tsx, any child route
+  // Header.tsx — reads session to conditionally render nav links (UX)
+  // create-product.tsx — reads session inside beforeLoad to block the route (security)
   const { session } = RootRoute.useRouteContext();
   ```
 
@@ -2012,6 +2013,8 @@ Use `beforeLoad` to guard routes — runs on every navigation, including client-
   | `beforeLoad` + role check | Blocks the route — actual security boundary |
 
   Hiding the link is a UX improvement. The `beforeLoad` guard is the real protection — anyone can navigate directly via URL.
+
+  But both of these only protect the UI and the route navigation. A determined user can still send a raw `POST` directly to the `createProduct` server function endpoint, bypassing both. That's why the server function itself needs its own auth check — covered in Step 5.
 
 - [x] <a id="p9-s4"></a>**Step 4 — Adaptive Header & user dropdown** 👤
 
