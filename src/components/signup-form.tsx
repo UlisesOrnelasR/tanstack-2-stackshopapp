@@ -1,6 +1,6 @@
 import { useForm } from "@tanstack/react-form";
-import { QueryClient, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -20,7 +20,6 @@ import {
 } from "#/components/ui/field";
 import { Input } from "#/components/ui/input";
 import { signUp } from "#/lib/auth-client";
-import { sessionQueryKey } from "./Header";
 
 const signupSchema = z
 	.object({
@@ -48,8 +47,8 @@ function FieldMessage({ error }: { error?: string }) {
 
 export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
 	const navigate = useNavigate();
-	const queryClient = useQueryClient();
 	const [submitError, setSubmitError] = useState<string | null>(null);
+	const router = useRouter();
 
 	const form = useForm({
 		defaultValues: {
@@ -79,9 +78,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
 					setSubmitError(response.error.message ?? "Could not create account.");
 					return;
 				}
-				await queryClient.invalidateQueries({
-					queryKey: sessionQueryKey,
-				}); // update session cache
+				await router.invalidate(); // Re-run __root beforeLoad to refresh the global session
 				toast.success("Account created successfully.");
 				navigate({ to: "/" });
 			} catch {

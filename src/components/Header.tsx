@@ -1,25 +1,20 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { ShoppingBag, User } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getCartItemsCount } from "#/data/cart";
-import { getSession } from "#/lib/auth.functions";
 import { signOut } from "#/lib/auth-client";
+import { Route as RootRoute } from "@/routes/__root";
 
 export const cartCountQueryKey = ["cart-count"] as const;
-export const sessionQueryKey = ["session"] as const;
 
 export default function Header() {
+	const { session } = RootRoute.useRouteContext();
 	const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-	const queryClient = useQueryClient();
+	const router = useRouter();
 
 	const navigate = useNavigate();
-
-	const { data: session } = useQuery({
-		queryKey: sessionQueryKey,
-		queryFn: () => getSession(),
-	});
 
 	const { data: cartSummary } = useQuery({
 		queryKey: cartCountQueryKey,
@@ -33,12 +28,12 @@ export default function Header() {
 	const handleLogout = async () => {
 		await signOut({
 			fetchOptions: {
-				onSuccess: () => {
+				onSuccess: async () => {
+					await router.invalidate(); // Re-run __root beforeLoad to refresh the global session
 					navigate({ to: "/" }); // Redirect to home
 					setIsUserMenuOpen(false); // Close dropdown
-					queryClient.setQueryData(sessionQueryKey, null); // Clear session cache inmediately
 					toast.success("Logged out successfully.", {
-						description: "Mock logout for now.",
+						description: "You will be redirected to the home page.",
 					});
 				},
 			},

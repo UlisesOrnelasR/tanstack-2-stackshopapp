@@ -9,10 +9,19 @@ import {
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { Toaster } from "sonner";
 import Header from "#/components/Header";
+import { getSession } from "#/lib/auth.functions";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 	{
+		beforeLoad: async () => {
+			const session = await getSession();
+
+			return {
+				session,
+			};
+		},
+
 		head: () => ({
 			meta: [
 				{
@@ -37,6 +46,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 				},
 			],
 		}),
+
 		shellComponent: RootDocument,
 	},
 );
@@ -55,7 +65,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 						<Header />
 						<main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
 					</div>
+
 					<Toaster />
+
 					<TanStackDevtools
 						config={{
 							position: "bottom-right",
@@ -67,6 +79,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 							},
 						]}
 					/>
+
 					<ReactQueryDevtools initialIsOpen={false} />
 					<Scripts />
 				</body>
