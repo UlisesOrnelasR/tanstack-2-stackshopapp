@@ -72,6 +72,7 @@
     - [Step 1 — Auth server functions](#p9-s1)
     - [Step 2 — Protect routes with `beforeLoad`](#p9-s2)
     - [Step 3 — Hide nav links by session](#p9-s3)
+    - [Step 4 — Adaptive Header & user dropdown](#p9-s4)
 - [🔔 Phase 9 — Toast Notifications with Sonner](#phase-9)
   - [Step 1 — Install Sonner](#p10-s1)
   - [Step 2 — Mount the Toaster](#p10-s2)
@@ -1885,6 +1886,49 @@ Use `beforeLoad` with a server function to guard routes — runs on every naviga
   Hiding the link is a UX improvement. The `beforeLoad` guard is the real protection — anyone can navigate directly via URL.
 
   > **Note — server function protection (omitted for simplicity):** In a production app the server functions themselves (`getSession`, any mutation fn) should also validate the role server-side, so that a direct HTTP call bypasses the route guard. For the scope of this project we rely on the `beforeLoad` check only.
+
+- [x] <a id="p9-s4"></a>**Step 4 — Adaptive Header & user dropdown** 👤
+
+  The Header now adapts its right-side actions based on whether a session exists.
+
+  **Unauthenticated state** — two plain links:
+
+  ```tsx
+  <Link to="/sign-in">Login</Link>
+  <Link to="/sign-up">Sign Up</Link>
+  ```
+
+  **Authenticated state** — a `User` icon button toggles a dropdown managed by local `useState`:
+
+  ```tsx
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
+  <button onClick={() => setIsUserMenuOpen((prev) => !prev)}>
+    <User size={18} />
+  </button>
+
+  {isUserMenuOpen && (
+    <div className="absolute right-0 mt-2 w-48 rounded-xl ...">
+      {/* name + email */}
+      <Link to="/profile">Profile</Link>
+      {session?.user.role === "admin" && (
+        <Link to="/products/create-product">Create Product</Link>
+      )}
+      <button onClick={() => toast.success("Logged out successfully.")}>
+        Log out
+      </button>
+    </div>
+  )}
+  ```
+
+  | Dropdown item | Visible to |
+  |---|---|
+  | Name + email (read-only) | All authenticated users |
+  | Profile | All authenticated users |
+  | Create Product | `admin` role only |
+  | Log out | All authenticated users |
+
+  The "Create Product" link inside the dropdown mirrors the `beforeLoad` guard on the route — it's a UX convenience, not a security boundary.
 
 ---
 

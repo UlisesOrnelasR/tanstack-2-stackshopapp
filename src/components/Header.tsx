@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBag, User } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { getCartItemsCount } from "#/data/cart";
 import { getSession } from "#/lib/auth.functions";
 
@@ -8,6 +10,8 @@ export const cartCountQueryKey = ["cart-count"] as const;
 export const sessionQueryKey = ["session"] as const;
 
 export default function Header() {
+	const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
 	const { data: session } = useQuery({
 		queryKey: sessionQueryKey,
 		queryFn: () => getSession(),
@@ -24,7 +28,7 @@ export default function Header() {
 
 	return (
 		<header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
-			<div className="mx-auto max-w-6xl px-4 py-3 items-center justify-between flex">
+			<div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
 				<div className="flex items-center gap-3">
 					<Link to="/" className="flex items-center gap-2">
 						<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-800">
@@ -45,30 +49,103 @@ export default function Header() {
 						>
 							Home
 						</Link>
+
 						<Link
 							to="/products"
 							className="rounded-lg px-3 py-1 transition hover:bg-slate-100 dark:hover:bg-slate-800"
 						>
 							Products
 						</Link>
-						{session?.user.role === "admin" && (
-							<Link to="/products/create-product">Create Product</Link>
-						)}
 					</nav>
 				</div>
+
 				<div className="flex items-center gap-2">
 					<Link
 						to="/cart"
-						className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+						className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
 					>
 						<span>Cart</span>
-						<span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-900 px-2 text-[11px] font-bold text-white">
+
+						<span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-900 px-2 text-[11px] font-bold text-white dark:bg-white dark:text-slate-900">
 							{itemCount}
 						</span>
+
 						<span className="hidden text-[11px] font-medium text-slate-500 sm:inline">
 							${total.toFixed(2)}
 						</span>
 					</Link>
+
+					{session ? (
+						<div className="relative">
+							<button
+								type="button"
+								onClick={() => setIsUserMenuOpen((current) => !current)}
+								className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-800 shadow-sm transition hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+								aria-label="Open user menu"
+							>
+								<User size={18} />
+							</button>
+
+							{isUserMenuOpen && (
+								<div className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-800 dark:bg-slate-900">
+									<div className="border-b border-slate-100 px-3 py-2 dark:border-slate-800">
+										<p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+											{session.user.name}
+										</p>
+										<p className="truncate text-xs text-slate-500">
+											{session.user.email}
+										</p>
+									</div>
+
+									<Link
+										to="/profile"
+										onClick={() => setIsUserMenuOpen(false)}
+										className="mt-2 block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+									>
+										Profile
+									</Link>
+									{session?.user.role === "admin" && (
+										<Link
+											to="/products/create-product"
+											className="mt-2 block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+										>
+											Create Product
+										</Link>
+									)}
+
+									<button
+										type="button"
+										onClick={() => {
+											setIsUserMenuOpen(false);
+
+											toast.success("Logged out successfully.", {
+												description: "Mock logout for now.",
+											});
+										}}
+										className="mt-2 block w-full rounded-lg px-3 py-2 text-left text-sm text-red-500 transition hover:bg-red-50 dark:hover:bg-red-950/30"
+									>
+										Log out
+									</button>
+								</div>
+							)}
+						</div>
+					) : (
+						<div className="flex items-center gap-2">
+							<Link
+								to="/sign-in"
+								className="rounded-full px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+							>
+								Login
+							</Link>
+
+							<Link
+								to="/sign-up"
+								className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:bg-white dark:text-slate-900"
+							>
+								Sign Up
+							</Link>
+						</div>
+					)}
 				</div>
 			</div>
 		</header>
