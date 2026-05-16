@@ -79,8 +79,8 @@
     - [Step 1 — Auth server functions](#p9-s1)
     - [Step 2 — Protect routes with `beforeLoad`](#p9-s2)
     - [Step 3 — Hide nav links by role](#p9-s3)
-    - [Step 4 — Adaptive Header & user dropdown](#p9-s4)
-    - [Step 5 — Protect the server function](#p9-s6)
+    - [Step 4 — Protect the server function](#p9-s6)
+    - [Step 5 — Adaptive Header & user dropdown](#p9-s4)
 - [🔔 Phase 9 — Toast Notifications with Sonner](#phase-9)
   - [Step 1 — Install Sonner](#p10-s1)
   - [Step 2 — Mount the Toaster](#p10-s2)
@@ -2014,9 +2014,45 @@ Use `beforeLoad` to guard routes — runs on every navigation, including client-
 
   Hiding the link is a UX improvement. The `beforeLoad` guard is the real protection — anyone can navigate directly via URL.
 
-  But both of these only protect the UI and the route navigation. A determined user can still send a raw `POST` directly to the `createProduct` server function endpoint, bypassing both. That's why the server function itself needs its own auth check — covered in Step 5.
+  But both of these only protect the UI and the route navigation. A determined user can still send a raw `POST` directly to the `createProduct` server function endpoint, bypassing both. That's why the server function itself needs its own auth check — covered in Step 4.
 
-- [x] <a id="p9-s4"></a>**Step 4 — Adaptive Header & user dropdown** 👤
+- [x] <a id="p9-s6"></a>**Step 4 — Protect the server function**
+
+  Hiding the link and blocking the route are UX measures — a determined user can still send a raw `POST` directly to the server function endpoint, bypassing both. The server function itself must be the final authority.
+
+  `createProduct` re-validates the session independently, server-side, before touching the database:
+
+  ```ts
+  // src/data/products.ts
+  export const createProduct = createServerFn({ method: "POST" })
+    .inputValidator((data: z.infer<typeof productSchema>) =>
+      productSchema.parse(data),
+    )
+    .handler(async ({ data }): Promise<ProductSelect> => {
+      const session = await getSession(); // fresh server-side check — no context here
+      if (!session) throw new Error("Unauthorized");
+      if (session.user.role !== "admin") throw new Error("Forbidden");
+
+      const { db } = await import("@/db");
+      const result = await db
+        .insert(products)
+        .values({ ...data, badge: data.badge ?? null })
+        .returning();
+      // ...
+    });
+  ```
+
+  This gives three independent layers of protection for `createProduct`:
+
+  | Layer | Where | What it does |
+  |---|---|---|
+  | **UI permissions** | `Header.tsx` | Hides the "Create Product" link unless `session?.user.role === "admin"` |
+  | **Route permissions** | `create-product.tsx` `beforeLoad` | Reads `context.session` — redirects to `/` or `/sign-in` before the page renders |
+  | **Server authorization** | `createProduct` handler | Calls `getSession()` directly — throws `Unauthorized` / `Forbidden` if the request bypasses the UI and route guards |
+
+  The route guard stops most users. The server-side check stops everyone else.
+
+- [x] <a id="p9-s4"></a>**Step 5 — Adaptive Header & user dropdown** 👤
 
   The Header now adapts its right-side actions based on whether a session exists.
 
@@ -2073,42 +2109,6 @@ Use `beforeLoad` to guard routes — runs on every navigation, including client-
   | Log out | All authenticated users |
 
   The "Create Product" link inside the dropdown mirrors the `beforeLoad` guard on the route — it's a UX convenience, not a security boundary.
-
-- [x] <a id="p9-s6"></a>**Step 5 — Protect the server function**
-
-  Hiding the link and blocking the route are UX measures — a determined user can still send a raw `POST` directly to the server function endpoint, bypassing both. The server function itself must be the final authority.
-
-  `createProduct` re-validates the session independently, server-side, before touching the database:
-
-  ```ts
-  // src/data/products.ts
-  export const createProduct = createServerFn({ method: "POST" })
-    .inputValidator((data: z.infer<typeof productSchema>) =>
-      productSchema.parse(data),
-    )
-    .handler(async ({ data }): Promise<ProductSelect> => {
-      const session = await getSession(); // fresh server-side check — no context here
-      if (!session) throw new Error("Unauthorized");
-      if (session.user.role !== "admin") throw new Error("Forbidden");
-
-      const { db } = await import("@/db");
-      const result = await db
-        .insert(products)
-        .values({ ...data, badge: data.badge ?? null })
-        .returning();
-      // ...
-    });
-  ```
-
-  This gives three independent layers of protection for `createProduct`:
-
-  | Layer | Where | What it does |
-  |---|---|---|
-  | **UI permissions** | `Header.tsx` | Hides the "Create Product" link unless `session?.user.role === "admin"` |
-  | **Route permissions** | `create-product.tsx` `beforeLoad` | Reads `context.session` — redirects to `/` or `/sign-in` before the page renders |
-  | **Server authorization** | `createProduct` handler | Calls `getSession()` directly — throws `Unauthorized` / `Forbidden` if the request bypasses the UI and route guards |
-
-  The route guard stops most users. The server-side check stops everyone else.
 
 ---
 
