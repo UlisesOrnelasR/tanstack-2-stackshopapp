@@ -140,6 +140,12 @@
 
 ---
 
+## 👥 Demo Users
+
+![Demo users](./assets/demo-users.svg)
+
+---
+
 <a id="project-structure"></a>
 
 ## 📁 Project Structure
@@ -1007,6 +1013,8 @@ This is a living document. Each step gets checked off as it's done.
 
 ### Phase 5 — Streaming UI & Loading States
 
+![phase5](./assets/phase5_streaming_ui_flow.svg)
+
 - [x] <a id="p5-s1"></a>**Step 1 — Suspense + `use` for streamed recommended products** ⚡
 
   Added skeleton loading states to the product detail page using React 19's `use` hook, `<Suspense>`, and the shadcn/ui `Skeleton` component.
@@ -1400,6 +1408,8 @@ This is a living document. Each step gets checked off as it's done.
 
 ### Phase 7 — Cart Page
 
+![phase8](./assets/phase8_auth_protection_layers.svg)
+
 - [x] <a id="p7-s1"></a>**Step 1 — Add the `empty` shadcn/ui component** 📦
 
   ```bash
@@ -1706,7 +1716,7 @@ This is a living document. Each step gets checked off as it's done.
 
 ### Phase 8 — Authentication with Better Auth
 
-> This phase covers **installation and configuration only** — wiring `signIn`, `signUp`, and `useSession` into the actual UI will happen in the next phase.
+![phase8](./assets/phase8_auth_protection_layers.svg)
 
 - [x] <a id="p8-s1"></a>**Step 1 — Auth UI pages (shadcn/ui)** 🎨
 
