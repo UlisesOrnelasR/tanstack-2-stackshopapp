@@ -11,6 +11,7 @@
 - [🤔 What is this?](#overview)
 - [🛠️ Core Technologies](#core-technologies)
 - [💫 Application Features](#application-features)
+- [👤 Demo users](#demo-users)
 - [📁 Project Structure](#project-structure)
 - [🗄️ Database Schema](#database-schema)
 
@@ -139,6 +140,8 @@
 - **Selective SSR** — each route controls its own rendering strategy independently
 
 ---
+
+<a id="demo-users"></a>
 
 ## 👥 Demo Users
 
