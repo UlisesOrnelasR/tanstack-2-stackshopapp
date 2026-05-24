@@ -1421,73 +1421,194 @@ This is a living document. Each step gets checked off as it's done.
 
 - [x] <a id="p7-s3"></a>**Step 3 — `addToCart`** ➕
 
-  Created `src/data/cart.ts` with the first server function.
-
-  1. **Server function** — `createServerFn({ method: "POST" })` runs on the server and receives `productId`.
-  2. **Upsert logic** — checks if the product already exists in `cartItems`; if it does, increments `quantity`; otherwise inserts a new row.
-  3. **Input validation** — `.inputValidator()` types the incoming payload as `{ productId: string }`.
-  4. **Button in `ProductCard`** — calls `addToCart({ data: { productId } })` with `e.preventDefault()` + `e.stopPropagation()` to avoid triggering the `<Link>` that wraps the card.
-  5. **Router invalidation** — `router.invalidate()` after the call causes TanStack Router to re-run active loaders without a full page reload.
-
-- [x] <a id="p7-s4"></a>**Step 4 — `fetchCartItems`** 📋
-
-  1. **Server function** — does an `innerJoin` between `cartItems` and `products`, then flattens the joined rows into a plain array for the client.
-
-     ```ts
-     // The join returns rows shaped as: { cart_items: {...}, products: {...} }
-     return rows.map((row) => {
-       const cartItem = row.cart_items;
-       const product = row.products;
-       return { id: cartItem.id, name: product.name, price: product.price, quantity: cartItem.quantity, ... };
-     });
-     ```
-
-  2. **Loader in `cart.tsx`** — `loader: async () => fetchCartItems()` runs the server function before the page renders.
-  3. **`Route.useLoaderData()`** inside `CartPage` — typed data available with no manual fetch.
-  4. **Subtotal with `reduce`** — `price` comes as `string` from Drizzle's `numeric` type, so `Number(item.price) * item.quantity` converts it before summing.
-
-- [x] <a id="p7-s5"></a>**Step 5 — `removeFromCart`** 🗑️
+  Created `src/data/cart.ts`. La función implementa un **upsert**: si el producto ya está en el cart incrementa `quantity`, si no inserta una fila nueva.
 
   ```ts
-  export const removeFromCart = createServerFn({ method: "POST" })
-    .inputValidator((data: { cartItemId: string }) => data)
+  // src/data/cart.ts
+  export const addToCart = createServerFn({ method: "POST" })
+    .inputValidator((data: { productId: string }) => data)
     .handler(async ({ data }) => {
-      await db.delete(cartItems).where(eq(cartItems.id, data.cartItemId));
-    });
-  ```
+      const { db } = await import("@/db");
+      const [existing] = await db
+        .select()
+        .from(cartItems)
+        .where(eq(cartItems.productId, data.productId))
+        .limit(1);
 
-  In the cart page, a `removingId` state tracks which item is being deleted so only that row's buttons disable — not the whole list. After deletion, `router.invalidate()` refreshes the list.
-
-- [x] <a id="p7-s6"></a>**Step 6 — `updateCartQuantity`** ➕➖
-
-  ```ts
-  export const updateCartQuantity = createServerFn({ method: "POST" })
-    .inputValidator((data: { cartItemId: string; delta: 1 | -1 }) => data)
-    .handler(async ({ data }) => {
-      const newQuantity = item.quantity + data.delta;
-      if (newQuantity <= 0) {
-        await db.delete(cartItems).where(eq(cartItems.id, data.cartItemId));
+      if (existing) {
+        await db
+          .update(cartItems)
+          .set({ quantity: existing.quantity + 1, updatedAt: new Date() })
+          .where(eq(cartItems.id, existing.id));
       } else {
-        await db.update(cartItems).set({ quantity: newQuantity, updatedAt: new Date() })...
+        await db.insert(cartItems).values({ productId: data.productId });
       }
     });
   ```
 
-  `delta: 1 | -1` keeps the API minimal — the `+` button passes `1`, the `−` button passes `-1`. If the result reaches `0`, the item is deleted automatically.
-
-  In the cart page, an `isBusy` flag (`updatingId === item.id || removingId === item.id`) locks all three buttons of a row while any operation is in flight, preventing double-clicks and race conditions.
-
-- [x] <a id="p7-s7"></a>**Step 7 — `clearCart`** 🧹
+  El botón en `ProductCard` llama a la función. `e.preventDefault()` + `e.stopPropagation()` evitan que el `<Link>` padre navegue. Después del insert, `queryClient.invalidateQueries` marca el cache del badge como stale para que se refetchee inmediatamente.
 
   ```ts
-  export const clearCart = createServerFn({ method: "POST" }).handler(
+  // src/components/ProductCard.tsx
+  onClick={async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setAdding(true);
+    await addToCart({ data: { productId: product.id } });
+    await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
+    router.invalidate();
+    setAdding(false);
+  }}
+  ```
+
+- [x] <a id="p7-s4"></a>**Step 4 — `fetchCartItems`** 📋
+
+  `cart_items` solo guarda `productId` y `quantity` — los detalles del producto viven en `products`. Un `innerJoin` trae ambas tablas en una sola query. El resultado viene con la forma `{ cart_items: {...}, products: {...} }`, así que se aplana en un objeto plano antes de retornarlo al cliente.
+
+  ```ts
+  // src/data/cart.ts
+  export const fetchCartItems = createServerFn({ method: "GET" }).handler(
     async () => {
-      await db.delete(cartItems); // no WHERE — deletes all rows
+      const { db } = await import("@/db");
+      const rows = await db
+        .select()
+        .from(cartItems)
+        .innerJoin(products, eq(cartItems.productId, products.id));
+
+      return rows.map((row) => {
+        const cartItem = row.cart_items;
+        const product = row.products;
+        return {
+          id: cartItem.id,
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          quantity: cartItem.quantity,
+          image: product.image,
+          inventory: product.inventory,
+        };
+      });
     },
   );
   ```
 
-  The "Clear cart" button sets a `clearing` boolean, calls `clearCart()`, then calls `router.invalidate()`. The empty state renders automatically once the list comes back empty.
+  La route la ejecuta en el `loader` antes de renderizar, y el componente lee el resultado con `useLoaderData`. El subtotal usa `Number(item.price)` porque Drizzle retorna `numeric` como `string`.
+
+  ```ts
+  // src/routes/cart.tsx
+  export const Route = createFileRoute("/cart")({
+    loader: async () => fetchCartItems(),
+    component: CartPage,
+  });
+
+  function CartPage() {
+    const cart = Route.useLoaderData();
+
+    const subtotal = cart.reduce(
+      (acc, item) => acc + Number(item.price) * item.quantity,
+      0,
+    );
+  }
+  ```
+
+- [x] <a id="p7-s5"></a>**Step 5 — `removeFromCart`** 🗑️
+
+  ```ts
+  // src/data/cart.ts
+  export const removeFromCart = createServerFn({ method: "POST" })
+    .inputValidator((data: { cartItemId: string }) => data)
+    .handler(async ({ data }) => {
+      const { db } = await import("@/db");
+      await db.delete(cartItems).where(eq(cartItems.id, data.cartItemId));
+    });
+  ```
+
+  El botón Remove usa un estado `removingId` para que solo los botones de esa fila se deshabiliten mientras el request está en curso — el resto de la lista sigue interactiva.
+
+  ```ts
+  // src/routes/cart.tsx
+  onClick={async () => {
+    setRemovingId(item.id);
+    await removeFromCart({ data: { cartItemId: item.id } });
+    await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
+    router.invalidate();
+    setRemovingId(null);
+  }}
+  ```
+
+- [x] <a id="p7-s6"></a>**Step 6 — `updateCartQuantity`** ➕➖
+
+  Recibe un `delta` de `1` o `-1` en lugar de un número directo. Fetchea la fila actual, calcula la nueva cantidad y decide si actualizar o borrar (cuando llega a `0`).
+
+  ```ts
+  // src/data/cart.ts
+  export const updateCartQuantity = createServerFn({ method: "POST" })
+    .inputValidator((data: { cartItemId: string; delta: 1 | -1 }) => data)
+    .handler(async ({ data }) => {
+      const { db } = await import("@/db");
+      const [item] = await db
+        .select()
+        .from(cartItems)
+        .where(eq(cartItems.id, data.cartItemId))
+        .limit(1);
+
+      if (!item) return;
+
+      const newQuantity = item.quantity + data.delta;
+
+      if (newQuantity <= 0) {
+        await db.delete(cartItems).where(eq(cartItems.id, data.cartItemId));
+      } else {
+        await db
+          .update(cartItems)
+          .set({ quantity: newQuantity, updatedAt: new Date() })
+          .where(eq(cartItems.id, data.cartItemId));
+      }
+    });
+  ```
+
+  En `cart.tsx`, `handleUpdateQuantity` envuelve la llamada y trackea qué fila está actualizando con `updatingId`. El flag `isBusy` deshabilita los tres botones de esa fila mientras cualquier operación está en vuelo, previniendo doble-click y race conditions.
+
+  ```ts
+  // src/routes/cart.tsx
+  async function handleUpdateQuantity(cartItemId: string, delta: 1 | -1) {
+    setUpdatingId(cartItemId);
+    await updateCartQuantity({ data: { cartItemId, delta } });
+    await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
+    router.invalidate();
+    setUpdatingId(null);
+  }
+
+  // por fila:
+  const isBusy = updatingId === item.id || removingId === item.id;
+  ```
+
+- [x] <a id="p7-s7"></a>**Step 7 — `clearCart`** 🧹
+
+  Sin cláusula `WHERE` — borra todas las filas de `cart_items`.
+
+  ```ts
+  // src/data/cart.ts
+  export const clearCart = createServerFn({ method: "POST" }).handler(
+    async () => {
+      const { db } = await import("@/db");
+      await db.delete(cartItems);
+    },
+  );
+  ```
+
+  El botón "Clear cart" pone `clearing` en `true` para deshabilitarse durante el request. Una vez que `router.invalidate()` refetchea el loader, `cart` queda como array vacío y el empty-state se renderiza automáticamente.
+
+  ```ts
+  // src/routes/cart.tsx
+  onClick={async () => {
+    setClearing(true);
+    await clearCart();
+    await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
+    router.invalidate();
+    setClearing(false);
+  }}
+  ```
 
 - [x] <a id="p7-s8"></a>**Step 8 — Cart badge in the Header** 🏷️
 
