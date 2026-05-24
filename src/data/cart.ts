@@ -12,8 +12,7 @@ export const getCartItemsCount = createServerFn({ method: "GET" }).handler(
 
 		const count = rows.reduce((acc, row) => acc + row.cart_items.quantity, 0);
 		const total = rows.reduce(
-			(acc, row) =>
-				acc + Number(row.products.price) * row.cart_items.quantity,
+			(acc, row) => acc + Number(row.products.price) * row.cart_items.quantity,
 			0,
 		);
 
@@ -38,6 +37,7 @@ export const fetchCartItems = createServerFn({ method: "GET" }).handler(
 
 				return {
 					id: cartItem.id,
+					productId: product.id, // productId we use in cart to redirect to product
 					name: product.name,
 					price: product.price,
 					quantity: cartItem.quantity,

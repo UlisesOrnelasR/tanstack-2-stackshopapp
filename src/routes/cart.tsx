@@ -24,6 +24,7 @@ import {
 // const cart: CartItem[] = [
 // 	{
 // 		id: "1",
+// 		productId: "dffhdfgj54465",
 // 		name: "TanStack Router Pro",
 // 		price: "99.99",
 // 		quantity: 2,
@@ -34,6 +35,7 @@ import {
 
 // type CartItem = {
 // 	id: string;
+// 	productId: string;
 // 	name: string;
 // 	price: string;
 // 	quantity: number;
@@ -119,7 +121,9 @@ function CartPage() {
 						onClick={async () => {
 							setClearing(true);
 							await clearCart();
-							await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
+							await queryClient.invalidateQueries({
+								queryKey: cartCountQueryKey,
+							});
 							router.invalidate();
 							setClearing(false);
 						}}
@@ -149,7 +153,7 @@ function CartPage() {
 								<div className="space-y-1">
 									<Link
 										to="/products/$id"
-										params={{ id: item.id }}
+										params={{ id: item.productId }}
 										className="text-base font-semibold hover:text-blue-600 dark:hover:text-blue-400"
 									>
 										{item.name}
@@ -217,7 +221,9 @@ function CartPage() {
 											await removeFromCart({
 												data: { cartItemId: item.id },
 											});
-											await queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
+											await queryClient.invalidateQueries({
+												queryKey: cartCountQueryKey,
+											});
 											router.invalidate();
 											setRemovingId(null);
 										}}
