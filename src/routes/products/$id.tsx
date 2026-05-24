@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	Link,
@@ -6,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { ArrowLeftIcon, ShoppingBagIcon, SparklesIcon } from "lucide-react";
 import { Suspense, useState } from "react";
+import { cartCountQueryKey } from "#/components/Header";
 import { RecommendedProducts } from "#/components/RecommndedProducts";
 import { Button } from "#/components/ui/button";
 import {
@@ -62,6 +64,7 @@ export const Route = createFileRoute("/products/$id")({
 
 function RouteComponent() {
 	const router = useRouter();
+	const queryClient = useQueryClient();
 	const { product, recommendedProducts } = Route.useLoaderData();
 	console.log(product);
 	const [adding, setAdding] = useState(false);
@@ -131,6 +134,10 @@ function RouteComponent() {
 											e.stopPropagation();
 											setAdding(true);
 											await addToCart({ data: { productId: product.id } });
+											await queryClient.invalidateQueries({
+												queryKey: cartCountQueryKey,
+											});
+
 											router.invalidate();
 											setAdding(false);
 										}}
