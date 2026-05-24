@@ -136,7 +136,7 @@ function RouteComponent() {
 											await addToCart({ data: { productId: product.id } });
 											await queryClient.invalidateQueries({
 												queryKey: cartCountQueryKey,
-											});
+											}); // "the data you cached under this key is now stale — refetch it."
 
 											router.invalidate();
 											setAdding(false);

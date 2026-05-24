@@ -88,8 +88,9 @@ function RouteComponent() {
 	const navigate = useNavigate();
 	const router = useRouter();
 	const [submitError, setSubmitError] = useState<string | null>(null);
-	const [imagePreview, setImagePreview] = useState<string | null>(null); // ← nuevo
-	const [uploading, setUploading] = useState(false); // ← nuevo
+	const [imagePreview, setImagePreview] = useState<string | null>(null);
+	const [compressedFile, setCompressedFile] = useState<File | null>(null);
+
 	const form = useForm({
 		defaultValues: {
 			name: "",
@@ -102,16 +103,38 @@ function RouteComponent() {
 		onSubmit: async ({ value }) => {
 			try {
 				setSubmitError(null);
+
+				if (!compressedFile) {
+					setSubmitError("Please select an image");
+					return; // Exit early if no image is selected
+				}
+
+				// Convert to base64 and upload only now
+				const base64 = await new Promise<string>((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve(reader.result as string);
+					reader.onerror = reject;
+					reader.readAsDataURL(compressedFile);
+				});
+
+				const { url } = await uploadProductImage({
+					data: {
+						fileBase64: base64,
+						fileName: compressedFile.name,
+					},
+				});
+
 				await createProduct({
 					data: {
 						name: value.name,
 						description: value.description,
 						price: value.price,
 						badge: value.badge,
-						image: value.image,
+						image: url,
 						inventory: value.inventory,
 					},
 				});
+
 				await router.invalidate({ sync: true });
 				navigate({ to: "/products" });
 			} catch {
@@ -120,48 +143,21 @@ function RouteComponent() {
 		},
 	});
 
-	async function handleImageSelect(
-		e: React.ChangeEvent<HTMLInputElement>,
-		field: any,
-	) {
+	async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
 		const file = e.target.files?.[0];
 		if (!file) return;
 
-		setUploading(true);
 		try {
-			// 👁️ compression
 			const compressed = await imageCompression(file, {
 				maxSizeMB: 0.5,
 				maxWidthOrHeight: 1200,
 				useWebWorker: true,
 			});
 
-			// 👁️ preview
-			const previewUrl = URL.createObjectURL(compressed);
-			setImagePreview(previewUrl);
-
-			// 📤 Convert to base 64 and upload
-			const reader = new FileReader();
-			reader.onload = async () => {
-				try {
-					const result = await uploadProductImage({
-						data: {
-							fileBase64: reader.result as string,
-							fileName: file.name,
-						},
-					});
-					field.handleChange(result.url);
-				} catch (err) {
-					setSubmitError("Error uploading image");
-					setImagePreview(null);
-				} finally {
-					setUploading(false);
-				}
-			};
-			reader.readAsDataURL(compressed);
-		} catch (err) {
+			setCompressedFile(compressed);
+			setImagePreview(URL.createObjectURL(compressed));
+		} catch {
 			setSubmitError("Error compressing image");
-			setUploading(false);
 		}
 	}
 
@@ -255,48 +251,11 @@ function RouteComponent() {
 								)}
 							</form.Field>
 
-							{/* <form.Field
-								name="image"
-								validators={{
-									onChange: fieldValidator(productSchema.shape.image),
-								}}
-							>
-								{(field) => (
-									<FormField field={field} label="Product Image *">
-										<Input
-											type="file"
-											accept="image/*"
-											onChange={(e) => handleImageSelect(e, field)}
-											disabled={uploading}
-										/>
-										{uploading && (
-											<p className="text-sm text-muted-foreground">
-												Compressing and uploading...
-											</p>
-										)}
-										{imagePreview && (
-											<img
-												src={imagePreview}
-												alt="Preview"
-												className="mt-2 h-32 w-32 rounded-md object-cover"
-											/>
-										)}
-									</FormField>
-								)}
-							</form.Field> */}
-							<form.Field
-								name="image"
-								validators={{
-									onChange: fieldValidator(productSchema.shape.image),
-								}}
-							>
+							<form.Field name="image">
 								{(field) => (
 									<FormField field={field} label="Product Image *">
 										<div className="space-y-3">
-											<label
-												className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors
-            ${uploading ? "pointer-events-none opacity-50" : "hover:border-primary/50 hover:bg-muted/50"}`}
-											>
+											<label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors hover:border-primary/50 hover:bg-muted/50">
 												{imagePreview ? (
 													<img
 														src={imagePreview}
@@ -332,26 +291,19 @@ function RouteComponent() {
 												<input
 													type="file"
 													accept="image/*"
-													onChange={(e) => handleImageSelect(e, field)}
-													disabled={uploading}
+													onChange={handleImageSelect}
 													className="hidden"
 												/>
 											</label>
 
-											{uploading && (
-												<p className="text-sm text-muted-foreground">
-													Compressing and uploading...
-												</p>
-											)}
-
-											{imagePreview && !uploading && (
+											{imagePreview && (
 												<Button
 													type="button"
 													variant="outline"
 													size="sm"
 													onClick={() => {
 														setImagePreview(null);
-														field.handleChange("");
+														setCompressedFile(null);
 													}}
 												>
 													Remove image
@@ -361,6 +313,7 @@ function RouteComponent() {
 									</FormField>
 								)}
 							</form.Field>
+
 							<form.Field
 								name="badge"
 								validators={{

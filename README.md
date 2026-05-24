@@ -2314,7 +2314,8 @@ Use `beforeLoad` to guard routes — runs on every navigation, including client-
 
 - [x] <a id="p10-storage-s7"></a>**Step 7 — Modify the form** `src/routes/products/create-product.tsx` 📝
 
-  Four targeted changes in this file:
+  **New approach — upload at submit, not on select:**
+  Instead of uploading the image the moment the admin picks a file, the upload only happens when they click "Create Product". If they cancel or change their mind, nothing gets sent to Supabase — zero orphaned files.
 
   ***
 
@@ -2337,107 +2338,162 @@ Use `beforeLoad` to guard routes — runs on every navigation, including client-
 
   ```ts
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);  // ← new
-  const [uploading, setUploading] = useState(false);                      // ← new
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [compressedFile, setCompressedFile] = useState<File | null>(null);
   ```
 
   | State | Purpose |
   |---|---|
-  | `imagePreview` | Object URL shown as a local preview while the upload is in flight |
-  | `uploading` | Disables the file input and shows a status message during upload |
+  | `imagePreview` | Object URL shown as a local preview |
+  | `compressedFile` | The compressed `File` object — held in memory until submit |
 
   ***
 
   **7.3 — Create the image select handler**
 
-  Add inside `RouteComponent`, before the `return`:
+  This function only compresses and shows a preview — it does **not** upload anything:
 
   ```ts
-  async function handleImageSelect(
-    e: React.ChangeEvent<HTMLInputElement>,
-    field: any
-  ) {
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploading(true);
     try {
-      // Compress before uploading
       const compressed = await imageCompression(file, {
         maxSizeMB: 0.5,
         maxWidthOrHeight: 1200,
         useWebWorker: true,
       });
 
-      // Show local preview immediately
-      const previewUrl = URL.createObjectURL(compressed);
-      setImagePreview(previewUrl);
-
-      // Convert to base64 and upload via server function
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const result = await uploadProductImage({
-            data: {
-              fileBase64: reader.result as string,
-              fileName: file.name,
-            },
-          });
-          field.handleChange(result.url); // store the public URL in the form field
-        } catch (err) {
-          setSubmitError("Error uploading image");
-          setImagePreview(null);
-        } finally {
-          setUploading(false);
-        }
-      };
-      reader.readAsDataURL(compressed);
-    } catch (err) {
+      setCompressedFile(compressed);
+      setImagePreview(URL.createObjectURL(compressed));
+    } catch {
       setSubmitError("Error compressing image");
-      setUploading(false);
     }
   }
   ```
 
   ***
 
-  **7.4 — Replace the Image URL field in JSX**
+  **7.4 — Upload in `onSubmit`**
 
-  Replace the `form.Field` block for the image with:
+  The image is uploaded to Supabase only when the admin clicks "Create Product". If they cancel or remove the image, nothing is uploaded — zero orphaned files:
+
+  ```ts
+  const form = useForm({
+    defaultValues: {
+      name: "",
+      description: "",
+      price: "",
+      badge: undefined as BadgeValue | undefined,
+      image: "",
+      inventory: "in-stock" as InventoryValue,
+    },
+    onSubmit: async ({ value }) => {
+      try {
+        setSubmitError(null);
+
+        if (!compressedFile) {
+          setSubmitError("Please select an image");
+          return;
+        }
+
+        // Convert to base64 and upload only now
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(compressedFile);
+        });
+
+        const { url } = await uploadProductImage({
+          data: {
+            fileBase64: base64,
+            fileName: compressedFile.name,
+          },
+        });
+
+        await createProduct({
+          data: {
+            name: value.name,
+            description: value.description,
+            price: value.price,
+            badge: value.badge,
+            image: url,
+            inventory: value.inventory,
+          },
+        });
+
+        await router.invalidate({ sync: true });
+        navigate({ to: "/products" });
+      } catch {
+        setSubmitError("Something went wrong. Please try again.");
+      }
+    },
+  });
+  ```
+
+  ***
+
+  **7.5 — Image field in JSX**
+
+  The image field is now a visual drop zone. No validators needed on this field because the URL is generated at submit time, not during input:
 
   ```tsx
-  <form.Field
-    name="image"
-    validators={{
-      onChange: fieldValidator(productSchema.shape.image),
-    }}
-  >
+  <form.Field name="image">
     {(field) => (
       <FormField field={field} label="Product Image *">
-        <Input
-          type="file"
-          accept="image/*"
-          onChange={(e) => handleImageSelect(e, field)}
-          disabled={uploading}
-        />
-        {uploading && (
-          <p className="text-sm text-muted-foreground">
-            Compressing and uploading...
-          </p>
-        )}
-        {imagePreview && (
-          <img
-            src={imagePreview}
-            alt="Preview"
-            className="mt-2 h-32 w-32 rounded-md object-cover"
-          />
-        )}
+        <div className="space-y-3">
+          <label
+            className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors hover:border-primary/50 hover:bg-muted/50"
+          >
+            {imagePreview ? (
+              <img
+                src={imagePreview}
+                alt="Preview"
+                className="h-36 w-36 rounded-lg object-cover"
+              />
+            ) : (
+              <>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                    <title>Upload icon</title>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Click to select an image
+                </p>
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+          </label>
+
+          {imagePreview && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setImagePreview(null);
+                setCompressedFile(null);
+              }}
+            >
+              Remove image
+            </Button>
+          )}
+        </div>
       </FormField>
     )}
   </form.Field>
   ```
-
-  The `productSchema` doesn't change — it keeps validating that `image` is a valid URL, because what gets saved to the database is the public URL returned by Supabase, not the file itself.
 
   ***
 
@@ -2448,19 +2504,20 @@ Use `beforeLoad` to guard routes — runs on every navigation, including client-
          ↓
   browser-image-compression (3MB → 500KB)
          ↓
-  FileReader converts to base64 (string)
+  Preview shown locally (URL.createObjectURL)
+  File held in memory (compressedFile state)
          ↓
-  uploadProductImage() — server function
+  Admin clicks "Create Product"
          ↓
-  Buffer.from(base64) → supabase.storage.upload()
+  FileReader converts to base64
+         ↓
+  uploadProductImage() → Supabase Storage
          ↓
   Supabase returns public URL
          ↓
-  URL is stored in the "image" form field
+  createProduct() saves the URL in the DB
          ↓
-  Admin submits → createProduct() saves the URL in the DB
-         ↓
-  Visitors see the image (public bucket)
+  If admin cancels → nothing was uploaded → zero wasted space
   ```
 
 ---
