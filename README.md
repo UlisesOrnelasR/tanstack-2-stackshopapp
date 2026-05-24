@@ -85,6 +85,14 @@
   - [Step 1 — Install Sonner](#p10-s1)
   - [Step 2 — Mount the Toaster](#p10-s2)
   - [Step 3 — Trigger toasts from components](#p10-s3)
+- [🖼️ Phase 10 — Image Upload with Supabase Storage](#phase-10)
+  - [Step 1 — Create the Bucket](#p10-storage-s1)
+  - [Step 2 — Configure RLS Policies](#p10-storage-s2)
+  - [Step 3 — Environment variables](#p10-storage-s3)
+  - [Step 4 — Install dependencies](#p10-storage-s4)
+  - [Step 5 — Create the Supabase client](#p10-storage-s5)
+  - [Step 6 — Server Function for image upload](#p10-storage-s6)
+  - [Step 7 — Modify create-product.tsx](#p10-storage-s7)
 
 ---
 
@@ -2165,6 +2173,295 @@ Use `beforeLoad` to guard routes — runs on every navigation, including client-
 
 ---
 
-## Status
+<a id="phase-10"></a>
 
-> **Phase 9 — complete ✅** (includes session in `__root.tsx` context · `router.invalidate()` for signup and logout sync · three-layer server function protection)
+### Phase 10 — Image Upload with Supabase Storage
+
+![flowstorage](./assets/supabase_storage_upload_flow.svg)
+
+- [x] <a id="p10-storage-s1"></a>**Step 1 — Create the Bucket in Supabase** 🪣
+
+  This is done in the Supabase dashboard — no code needed.
+
+  1. Open your project at [supabase.com](https://supabase.com)
+  2. In the left menu click **Storage**
+  3. Click **New Bucket**
+  4. Name: `product-images`
+  5. Check **Public bucket** ✅ (so any visitor can see the images)
+  6. Click **Create bucket**
+
+  ![step1](./assets/step1.png)
+
+- [x] <a id="p10-storage-s2"></a>**Step 2 — Configure access policies (RLS Policies)** 🔒
+
+  Supabase uses RLS policies to control who can view, upload, or delete files. But those policies only work when you use Supabase Auth.
+
+  We use **Better Auth**, so Supabase always sees requests as anonymous — it doesn't know who the user is. That's why we'll use the `service_role` key, which bypasses all RLS policies.
+
+  Permission verification is done by us inside each server function:
+
+  ```ts
+  const session = await getSession();
+  if (!session || session.user.role !== "admin") {
+    throw new Error("Unauthorized");
+  }
+  ```
+
+  So for this step, nothing needs to be configured.
+
+- [x] <a id="p10-storage-s3"></a>**Step 3 — Environment variables** 🔐
+
+  Your `DATABASE_URL` is for Drizzle to talk directly to PostgreSQL. But Supabase Storage is not PostgreSQL — it's a separate REST API. To talk to it you need the project URL + the anon key. They're two different things.
+
+  Go to **Project Settings → API Keys → Legacy anon, service_role API keys** tab and add to your `.env`:
+
+  ```env
+  DATABASE_URL="postgresql://postgres.fceondpyuqyitudbtnuw:<yourpassword>@aws-1-us-west-2.pooler.supabase.com:5432/postgres"
+  BETTER_AUTH_SECRET=MYtcOnjaZUdCXep01HdHEKcUVHrmZmQB
+  BETTER_AUTH_URL=http://localhost:3000
+  SUPABASE_URL=https://fceondpyuqyitudbtnuw.supabase.co
+  SUPABASE_ANON_KEY=eyJhbGc1OiJIUzI1NiIsInR5cCI6IkpXVCJ9...paste_full_key_here
+  SUPABASE_SERVICE_ROLE_KEY=eyJhbG...your_service_role_key
+  ```
+
+  | Variable | Purpose |
+  |---|---|
+  | `SUPABASE_URL` | Base URL of your Supabase project — for the Storage REST API |
+  | `SUPABASE_ANON_KEY` | Public key — safe for the browser, respects RLS |
+  | `SUPABASE_SERVICE_ROLE_KEY` | Secret key — bypasses RLS, **server-side only** |
+
+- [x] <a id="p10-storage-s4"></a>**Step 4 — Install dependencies** 📦
+
+  ```bash
+  npm i @supabase/supabase-js browser-image-compression
+  ```
+
+  | Package | Purpose |
+  |---|---|
+  | `@supabase/supabase-js` | Client that talks to Supabase Storage (upload, delete, get URLs) |
+  | `browser-image-compression` | Compresses the image in the browser before sending it to the server |
+
+- [x] <a id="p10-storage-s5"></a>**Step 5 — Create the Supabase client** `src/lib/supabase.ts` ⚡
+
+  Create this new file:
+
+  ```ts
+  import { createClient } from "@supabase/supabase-js";
+
+  const supabaseUrl = process.env.SUPABASE_URL ?? "";
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+
+  export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+  ```
+
+  This client is independent from Drizzle. Drizzle talks directly to PostgreSQL. This client talks to Supabase's REST API for Storage. They don't interfere with each other.
+
+  | Client | Speaks to | Used for |
+  |---|---|---|
+  | Drizzle (`src/db/index.ts`) | PostgreSQL (TCP pool) | All DB queries and mutations |
+  | Supabase (`src/lib/supabase.ts`) | Storage REST API | File uploads and public URLs |
+
+- [x] <a id="p10-storage-s6"></a>**Step 6 — Server Function to upload images** 🖼️
+
+  In `src/data/products.ts`, add this new function at the end of the file, after `createProduct`:
+
+  ```ts
+  export const uploadProductImage = createServerFn({ method: "POST" })
+    .inputValidator((data: { fileBase64: string; fileName: string }) => data)
+    .handler(async ({ data }) => {
+      // Only admins
+      const session = await getSession();
+      if (!session || session.user.role !== "admin") {
+        throw new Error("Unauthorized");
+      }
+
+      const { supabase } = await import("@/lib/supabase");
+
+      // Convert base64 → Buffer
+      const base64Data = data.fileBase64.split(",")[1] ?? data.fileBase64;
+      const buffer = Buffer.from(base64Data, "base64");
+
+      // Fix content type: jpg → jpeg
+      const ext = data.fileName.split(".").pop()?.toLowerCase() ?? "jpg";
+      const mimeType = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+
+      // Unique name
+      const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const filePath = `products/${uniqueName}`;
+
+      // Upload to Supabase
+      const { error } = await supabase.storage
+        .from("product-images")
+        .upload(filePath, buffer, {
+          contentType: mimeType,
+          upsert: false,
+        });
+
+      if (error) {
+        throw new Error(`Upload failed: ${error.message}`);
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(filePath);
+
+      return { url: urlData.publicUrl };
+    });
+  ```
+
+  Why `base64` instead of `FormData`? TanStack Start's `createServerFn` serializes inputs as JSON. Binary files can't go through JSON, so we encode the file as base64 on the client, pass it as a string, and decode it back to a `Buffer` on the server before uploading.
+
+- [x] <a id="p10-storage-s7"></a>**Step 7 — Modify the form** `src/routes/products/create-product.tsx` 📝
+
+  Four targeted changes in this file:
+
+  ***
+
+  **7.1 — Update the imports**
+
+  ```ts
+  // BEFORE:
+  import { createProduct, productSchema } from "@/data/products";
+
+  // AFTER:
+  import imageCompression from "browser-image-compression";
+  import { createProduct, productSchema, uploadProductImage } from "@/data/products";
+  ```
+
+  ***
+
+  **7.2 — Add upload state**
+
+  Inside `RouteComponent`, alongside the `submitError` you already have:
+
+  ```ts
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);  // ← new
+  const [uploading, setUploading] = useState(false);                      // ← new
+  ```
+
+  | State | Purpose |
+  |---|---|
+  | `imagePreview` | Object URL shown as a local preview while the upload is in flight |
+  | `uploading` | Disables the file input and shows a status message during upload |
+
+  ***
+
+  **7.3 — Create the image select handler**
+
+  Add inside `RouteComponent`, before the `return`:
+
+  ```ts
+  async function handleImageSelect(
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: any
+  ) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      // Compress before uploading
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.5,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+      });
+
+      // Show local preview immediately
+      const previewUrl = URL.createObjectURL(compressed);
+      setImagePreview(previewUrl);
+
+      // Convert to base64 and upload via server function
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const result = await uploadProductImage({
+            data: {
+              fileBase64: reader.result as string,
+              fileName: file.name,
+            },
+          });
+          field.handleChange(result.url); // store the public URL in the form field
+        } catch (err) {
+          setSubmitError("Error uploading image");
+          setImagePreview(null);
+        } finally {
+          setUploading(false);
+        }
+      };
+      reader.readAsDataURL(compressed);
+    } catch (err) {
+      setSubmitError("Error compressing image");
+      setUploading(false);
+    }
+  }
+  ```
+
+  ***
+
+  **7.4 — Replace the Image URL field in JSX**
+
+  Replace the `form.Field` block for the image with:
+
+  ```tsx
+  <form.Field
+    name="image"
+    validators={{
+      onChange: fieldValidator(productSchema.shape.image),
+    }}
+  >
+    {(field) => (
+      <FormField field={field} label="Product Image *">
+        <Input
+          type="file"
+          accept="image/*"
+          onChange={(e) => handleImageSelect(e, field)}
+          disabled={uploading}
+        />
+        {uploading && (
+          <p className="text-sm text-muted-foreground">
+            Compressing and uploading...
+          </p>
+        )}
+        {imagePreview && (
+          <img
+            src={imagePreview}
+            alt="Preview"
+            className="mt-2 h-32 w-32 rounded-md object-cover"
+          />
+        )}
+      </FormField>
+    )}
+  </form.Field>
+  ```
+
+  The `productSchema` doesn't change — it keeps validating that `image` is a valid URL, because what gets saved to the database is the public URL returned by Supabase, not the file itself.
+
+  ***
+
+  **Complete flow** 🎯
+
+  ```
+  Admin selects image
+         ↓
+  browser-image-compression (3MB → 500KB)
+         ↓
+  FileReader converts to base64 (string)
+         ↓
+  uploadProductImage() — server function
+         ↓
+  Buffer.from(base64) → supabase.storage.upload()
+         ↓
+  Supabase returns public URL
+         ↓
+  URL is stored in the "image" form field
+         ↓
+  Admin submits → createProduct() saves the URL in the DB
+         ↓
+  Visitors see the image (public bucket)
+  ```
+
+---
+

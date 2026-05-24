@@ -87,3 +87,55 @@ export const createProduct = createServerFn({ method: "POST" })
 		}
 		return product;
 	});
+
+export const uploadProductImage = createServerFn({ method: "POST" })
+	.inputValidator((data: { fileBase64: string; fileName: string }) => data)
+	.handler(async ({ data }) => {
+		// Only admins
+		const session = await getSession();
+		if (!session || session.user.role !== "admin") {
+			throw new Error("Unauthorized");
+		}
+
+		const { supabase } = await import("@/lib/supabase");
+
+		// Convert base64 → Buffer
+		const base64Data = data.fileBase64.split(",")[1] ?? data.fileBase64;
+		const buffer = Buffer.from(base64Data, "base64");
+
+		// Fix content type: jpg → jpeg
+		const ext = data.fileName.split(".").pop()?.toLowerCase() ?? "jpg";
+		const mimeType = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+
+		// Unique name
+		const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+		const filePath = `products/${uniqueName}`;
+
+		console.log("Uploading to Supabase Storage:", {
+			filePath,
+			mimeType,
+			bufferSize: buffer.length,
+		});
+
+		// Upload to Supabase
+		const { error } = await supabase.storage
+			.from("product-images")
+			.upload(filePath, buffer, {
+				contentType: mimeType,
+				upsert: false,
+			});
+
+		if (error) {
+			console.error("Supabase upload error:", error);
+			throw new Error(`Upload failed: ${error.message}`);
+		}
+
+		// Get public URL
+		const { data: urlData } = supabase.storage
+			.from("product-images")
+			.getPublicUrl(filePath);
+
+		console.log("Upload success, public URL:", urlData.publicUrl);
+
+		return { url: urlData.publicUrl };
+	});

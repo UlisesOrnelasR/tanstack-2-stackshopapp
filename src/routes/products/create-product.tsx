@@ -5,6 +5,7 @@ import {
 	useNavigate,
 	useRouter,
 } from "@tanstack/react-router";
+import imageCompression from "browser-image-compression";
 import { useState } from "react";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,11 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { createProduct, productSchema } from "@/data/products";
+import {
+	createProduct,
+	productSchema,
+	uploadProductImage,
+} from "@/data/products";
 import type { BadgeValue, InventoryValue } from "@/db/schema";
 
 export const Route = createFileRoute("/products/create-product")({
@@ -83,6 +88,8 @@ function RouteComponent() {
 	const navigate = useNavigate();
 	const router = useRouter();
 	const [submitError, setSubmitError] = useState<string | null>(null);
+	const [imagePreview, setImagePreview] = useState<string | null>(null); // ← nuevo
+	const [uploading, setUploading] = useState(false); // ← nuevo
 	const form = useForm({
 		defaultValues: {
 			name: "",
@@ -112,6 +119,51 @@ function RouteComponent() {
 			}
 		},
 	});
+
+	async function handleImageSelect(
+		e: React.ChangeEvent<HTMLInputElement>,
+		field: any,
+	) {
+		const file = e.target.files?.[0];
+		if (!file) return;
+
+		setUploading(true);
+		try {
+			// 👁️ compression
+			const compressed = await imageCompression(file, {
+				maxSizeMB: 0.5,
+				maxWidthOrHeight: 1200,
+				useWebWorker: true,
+			});
+
+			// 👁️ preview
+			const previewUrl = URL.createObjectURL(compressed);
+			setImagePreview(previewUrl);
+
+			// 📤 Convert to base 64 and upload
+			const reader = new FileReader();
+			reader.onload = async () => {
+				try {
+					const result = await uploadProductImage({
+						data: {
+							fileBase64: reader.result as string,
+							fileName: file.name,
+						},
+					});
+					field.handleChange(result.url);
+				} catch (err) {
+					setSubmitError("Error uploading image");
+					setImagePreview(null);
+				} finally {
+					setUploading(false);
+				}
+			};
+			reader.readAsDataURL(compressed);
+		} catch (err) {
+			setSubmitError("Error compressing image");
+			setUploading(false);
+		}
+	}
 
 	return (
 		<div className="mx-auto max-w-7xl py-8 px-4">
@@ -203,6 +255,35 @@ function RouteComponent() {
 								)}
 							</form.Field>
 
+							{/* <form.Field
+								name="image"
+								validators={{
+									onChange: fieldValidator(productSchema.shape.image),
+								}}
+							>
+								{(field) => (
+									<FormField field={field} label="Product Image *">
+										<Input
+											type="file"
+											accept="image/*"
+											onChange={(e) => handleImageSelect(e, field)}
+											disabled={uploading}
+										/>
+										{uploading && (
+											<p className="text-sm text-muted-foreground">
+												Compressing and uploading...
+											</p>
+										)}
+										{imagePreview && (
+											<img
+												src={imagePreview}
+												alt="Preview"
+												className="mt-2 h-32 w-32 rounded-md object-cover"
+											/>
+										)}
+									</FormField>
+								)}
+							</form.Field> */}
 							<form.Field
 								name="image"
 								validators={{
@@ -210,22 +291,76 @@ function RouteComponent() {
 								}}
 							>
 								{(field) => (
-									<FormField field={field} label="Image URL *">
-										<Input
-											type="url"
-											id={field.name}
-											name={field.name}
-											value={field.state.value}
-											onChange={(e) => field.handleChange(e.target.value)}
-											placeholder="https://example.com/image.jpg"
-											aria-invalid={
-												field.state.meta.isTouched && !field.state.meta.isValid
-											}
-										/>
+									<FormField field={field} label="Product Image *">
+										<div className="space-y-3">
+											<label
+												className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors
+            ${uploading ? "pointer-events-none opacity-50" : "hover:border-primary/50 hover:bg-muted/50"}`}
+											>
+												{imagePreview ? (
+													<img
+														src={imagePreview}
+														alt="Preview"
+														className="h-36 w-36 rounded-lg object-cover"
+													/>
+												) : (
+													<>
+														<div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+															<svg
+																xmlns="http://www.w3.org/2000/svg"
+																width="20"
+																height="20"
+																viewBox="0 0 24 24"
+																fill="none"
+																stroke="currentColor"
+																strokeWidth="1.5"
+																strokeLinecap="round"
+																strokeLinejoin="round"
+																className="text-muted-foreground"
+															>
+																<title>Upload icon</title>
+																<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+																<polyline points="17 8 12 3 7 8" />
+																<line x1="12" y1="3" x2="12" y2="15" />
+															</svg>
+														</div>
+														<p className="text-sm text-muted-foreground">
+															Click to select an image
+														</p>
+													</>
+												)}
+												<input
+													type="file"
+													accept="image/*"
+													onChange={(e) => handleImageSelect(e, field)}
+													disabled={uploading}
+													className="hidden"
+												/>
+											</label>
+
+											{uploading && (
+												<p className="text-sm text-muted-foreground">
+													Compressing and uploading...
+												</p>
+											)}
+
+											{imagePreview && !uploading && (
+												<Button
+													type="button"
+													variant="outline"
+													size="sm"
+													onClick={() => {
+														setImagePreview(null);
+														field.handleChange("");
+													}}
+												>
+													Remove image
+												</Button>
+											)}
+										</div>
 									</FormField>
 								)}
 							</form.Field>
-
 							<form.Field
 								name="badge"
 								validators={{
