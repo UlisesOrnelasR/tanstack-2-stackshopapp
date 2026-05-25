@@ -94,6 +94,12 @@
   - [Step 5 — Create the Supabase client](#p10-storage-s5)
   - [Step 6 — Server Function for image upload](#p10-storage-s6)
   - [Step 7 — Modify create-product.tsx](#p10-storage-s7)
+- [🛡️ Phase 11 — Admin Product Management](#phase-11)
+  - [Step 1 — Install dependencies](#p11-s1)
+  - [Step 2 — Create the route](#p11-s2)
+  - [Step 3 — Add link in the Header](#p11-s3)
+  - [Step 4 — Create `updateProduct` and `deleteProduct`](#p11-s4)
+  - [Step 5 — Connect server functions in `manage-products.tsx`](#p11-s5)
 
 ---
 
