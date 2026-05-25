@@ -139,3 +139,50 @@ export const uploadProductImage = createServerFn({ method: "POST" })
 
 		return { url: urlData.publicUrl };
 	});
+
+const updateProductSchema = productSchema.partial().extend({
+	id: z.string().min(1, "Product ID is required"),
+});
+
+export const updateProduct = createServerFn({ method: "POST" })
+	.inputValidator((data: z.infer<typeof updateProductSchema>) =>
+		updateProductSchema.parse(data),
+	)
+	.handler(async ({ data }) => {
+		const session = await getSession();
+		if (!session) throw new Error("Unauthorized");
+		if (session.user.role !== "admin") throw new Error("Forbidden");
+
+		const { db } = await import("@/db");
+		const { id, ...values } = data;
+
+		const updateData: Record<string, unknown> = {};
+		if (values.name !== undefined) updateData.name = values.name;
+		if (values.description !== undefined)
+			updateData.description = values.description;
+		if (values.price !== undefined) updateData.price = values.price;
+		if (values.image !== undefined) updateData.image = values.image;
+		if (values.inventory !== undefined) updateData.inventory = values.inventory;
+		if (values.badge !== undefined) updateData.badge = values.badge ?? null;
+
+		const result = await db
+			.update(products)
+			.set(updateData)
+			.where(eq(products.id, id))
+			.returning();
+
+		const product = result[0];
+		if (!product) throw new Error("Product not found");
+		return product;
+	});
+
+export const deleteProduct = createServerFn({ method: "POST" })
+	.inputValidator((data: { id: string }) => data)
+	.handler(async ({ data }) => {
+		const session = await getSession();
+		if (!session) throw new Error("Unauthorized");
+		if (session.user.role !== "admin") throw new Error("Forbidden");
+
+		const { db } = await import("@/db");
+		await db.delete(products).where(eq(products.id, data.id));
+	});

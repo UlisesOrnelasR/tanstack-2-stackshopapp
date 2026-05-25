@@ -2656,3 +2656,703 @@ Use `beforeLoad` to guard routes — runs on every navigation, including client-
 
 ---
 
+<a id="phase-11"></a>
+
+### Phase 11 — Admin Product Management
+
+![phase11](./assets/phase_11_admin_product_management.svg)
+
+Admin page for editing and deleting products from the catalog. Uses TanStack Table to list products, a shadcn Dialog for inline editing with optional image upload (uploaded to Supabase on save), and an AlertDialog for deletion confirmation. Protected via `beforeLoad` + admin role verification inside the server functions.
+
+- [x] <a id="p11-s1"></a>**Step 1 — Install dependencies** 📦
+
+  The Manage Products page requires three new packages:
+
+  | Package | Purpose |
+  |---|---|
+  | `@tanstack/react-table` | Table logic: sorting, filtering, pagination |
+  | `table` (shadcn) | UI components that TanStack Table renders |
+  | `dialog` (shadcn) | Modal for inline product editing |
+  | `alert-dialog` (shadcn) | Confirmation prompt before deleting |
+
+  ```bash
+  npm install @tanstack/react-table
+  npx shadcn@latest add dialog alert-dialog table
+  ```
+
+  This generates `src/components/ui/dialog.tsx`, `src/components/ui/alert-dialog.tsx`, and `src/components/ui/table.tsx` — Radix UI primitives with shadcn styles ready to use.
+
+- [x] <a id="p11-s2"></a>**Step 2 — Create the route** `src/routes/products/manage-products.tsx` 🗂️
+
+  This page fetches all products with `getAllProducts()` in the loader and displays them in a TanStack Table. The edit Dialog and delete AlertDialog are mounted, but their handlers only `console.log` for now — they'll be wired to server functions in Step 4.
+
+  > **`beforeLoad`** redirects to `/sign-in` if there's no session, and to `/` if the role isn't `admin`. The guard runs on the server before the loader even fires.
+
+  ```tsx
+  import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+  import {
+  	type ColumnDef,
+  	flexRender,
+  	getCoreRowModel,
+  	useReactTable,
+  } from "@tanstack/react-table";
+  import imageCompression from "browser-image-compression";
+  import { Pencil, Trash2 } from "lucide-react";
+  import { useState } from "react";
+  import {
+  	AlertDialog,
+  	AlertDialogAction,
+  	AlertDialogCancel,
+  	AlertDialogContent,
+  	AlertDialogDescription,
+  	AlertDialogFooter,
+  	AlertDialogHeader,
+  	AlertDialogTitle,
+  } from "@/components/ui/alert-dialog";
+  import { Button } from "@/components/ui/button";
+  import {
+  	Card,
+  	CardContent,
+  	CardDescription,
+  	CardHeader,
+  	CardTitle,
+  } from "@/components/ui/card";
+  import {
+  	Dialog,
+  	DialogContent,
+  	DialogDescription,
+  	DialogFooter,
+  	DialogHeader,
+  	DialogTitle,
+  } from "@/components/ui/dialog";
+  import { Input } from "@/components/ui/input";
+  import { Label } from "@/components/ui/label";
+  import {
+  	Select,
+  	SelectContent,
+  	SelectItem,
+  	SelectTrigger,
+  	SelectValue,
+  } from "@/components/ui/select";
+  import {
+  	Table,
+  	TableBody,
+  	TableCell,
+  	TableHead,
+  	TableHeader,
+  	TableRow,
+  } from "@/components/ui/table";
+  import { Textarea } from "@/components/ui/textarea";
+  import { getAllProducts } from "@/data/products";
+  import type { InventoryValue, ProductSelect } from "@/db/schema";
+
+  export const Route = createFileRoute("/products/manage-products")({
+  	beforeLoad: async ({ context }) => {
+  		const session = context.session;
+  		if (!session) throw redirect({ to: "/sign-in" });
+  		if (session.user.role !== "admin") throw redirect({ to: "/" });
+  		return { user: session.user };
+  	},
+  	loader: async () => getAllProducts(),
+  	component: ManageProductsPage,
+  });
+
+  function ManageProductsPage() {
+  	const products = Route.useLoaderData();
+  	const router = useRouter();
+
+  	// Edit dialog state
+  	const [editingProduct, setEditingProduct] = useState<ProductSelect | null>(
+  		null,
+  	);
+  	const [editForm, setEditForm] = useState({
+  		name: "",
+  		description: "",
+  		price: "",
+  		badge: "none",
+  		inventory: "in-stock",
+  	});
+
+  	// Image state
+  	const [imagePreview, setImagePreview] = useState<string | null>(null);
+  	const [compressedFile, setCompressedFile] = useState<File | null>(null);
+
+  	// Delete dialog state
+  	const [deletingProduct, setDeletingProduct] = useState<ProductSelect | null>(
+  		null,
+  	);
+
+  	// Loading states
+  	const [isSaving, setIsSaving] = useState(false);
+  	const [isDeleting, setIsDeleting] = useState(false);
+
+  	function openEditDialog(product: ProductSelect) {
+  		setEditingProduct(product);
+  		setEditForm({
+  			name: product.name,
+  			description: product.description,
+  			price: product.price,
+  			badge: product.badge ?? "none",
+  			inventory: product.inventory,
+  		});
+  		setImagePreview(null);
+  		setCompressedFile(null);
+  	}
+
+  	async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  		const file = e.target.files?.[0];
+  		if (!file) return;
+
+  		try {
+  			const compressed = await imageCompression(file, {
+  				maxSizeMB: 0.5,
+  				maxWidthOrHeight: 1200,
+  				useWebWorker: true,
+  			});
+  			setCompressedFile(compressed);
+  			setImagePreview(URL.createObjectURL(compressed));
+  		} catch {
+  			console.error("Error compressing image");
+  		}
+  	}
+
+  	async function handleSave() {
+  		if (!editingProduct) return;
+  		setIsSaving(true);
+
+  		// TODO: replace with real updateProduct server function
+  		console.log("Saving product:", editingProduct.id, editForm);
+  		console.log("New image:", compressedFile ? "yes" : "no (keep current)");
+
+  		setIsSaving(false);
+  		setEditingProduct(null);
+  	}
+
+  	async function handleDelete() {
+  		if (!deletingProduct) return;
+  		setIsDeleting(true);
+
+  		// TODO: replace with real deleteProduct server function
+  		console.log("Deleting product:", deletingProduct.id);
+
+  		setIsDeleting(false);
+  		setDeletingProduct(null);
+  	}
+
+  	const columns: ColumnDef<ProductSelect>[] = [
+  		{
+  			accessorKey: "image",
+  			header: "Image",
+  			cell: ({ row }) => (
+  				<img
+  					src={row.original.image}
+  					alt={row.original.name}
+  					className="h-10 w-10 rounded-md object-cover"
+  				/>
+  			),
+  		},
+  		{
+  			accessorKey: "name",
+  			header: "Name",
+  		},
+  		{
+  			accessorKey: "price",
+  			header: "Price",
+  			cell: ({ row }) => <span>${row.original.price}</span>,
+  		},
+  		{
+  			accessorKey: "badge",
+  			header: "Badge",
+  			cell: ({ row }) => (
+  				<span className="text-sm text-slate-500">
+  					{row.original.badge ?? "—"}
+  				</span>
+  			),
+  		},
+  		{
+  			accessorKey: "inventory",
+  			header: "Inventory",
+  			cell: ({ row }) => {
+  				const status = row.original.inventory;
+  				const styles: Record<string, string> = {
+  					"in-stock":
+  						"bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  					backorder:
+  						"bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  					preorder:
+  						"bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+  				};
+  				return (
+  					<span
+  						className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] ?? ""}`}
+  					>
+  						{status}
+  					</span>
+  				);
+  			},
+  		},
+  		{
+  			id: "actions",
+  			header: "Actions",
+  			cell: ({ row }) => (
+  				<div className="flex items-center gap-2">
+  					<Button
+  						variant="outline"
+  						size="sm"
+  						onClick={() => openEditDialog(row.original)}
+  					>
+  						<Pencil size={14} />
+  					</Button>
+  					<Button
+  						variant="outline"
+  						size="sm"
+  						className="text-red-500 hover:text-red-700 hover:border-red-300"
+  						onClick={() => setDeletingProduct(row.original)}
+  					>
+  						<Trash2 size={14} />
+  					</Button>
+  				</div>
+  			),
+  		},
+  	];
+
+  	const table = useReactTable({
+  		data: products,
+  		columns,
+  		getCoreRowModel: getCoreRowModel(),
+  	});
+
+  	return (
+  		<div className="mx-auto max-w-7xl py-8 px-4">
+  			<div className="space-y-6">
+  				<Card>
+  					<CardHeader>
+  						<CardTitle className="text-lg">Manage Products</CardTitle>
+  						<CardDescription>
+  							Edit or remove products from the catalog.
+  						</CardDescription>
+  					</CardHeader>
+  				</Card>
+
+  				<Card>
+  					<CardContent className="p-0">
+  						<Table>
+  							<TableHeader>
+  								{table.getHeaderGroups().map((headerGroup) => (
+  									<TableRow key={headerGroup.id}>
+  										{headerGroup.headers.map((header) => (
+  											<TableHead key={header.id}>
+  												{header.isPlaceholder
+  													? null
+  													: flexRender(
+  															header.column.columnDef.header,
+  															header.getContext(),
+  														)}
+  											</TableHead>
+  										))}
+  									</TableRow>
+  								))}
+  							</TableHeader>
+  							<TableBody>
+  								{table.getRowModel().rows.length ? (
+  									table.getRowModel().rows.map((row) => (
+  										<TableRow key={row.id}>
+  											{row.getVisibleCells().map((cell) => (
+  												<TableCell key={cell.id}>
+  													{flexRender(
+  														cell.column.columnDef.cell,
+  														cell.getContext(),
+  													)}
+  												</TableCell>
+  											))}
+  										</TableRow>
+  									))
+  								) : (
+  									<TableRow>
+  										<TableCell
+  											colSpan={columns.length}
+  											className="h-24 text-center text-slate-500"
+  										>
+  											No products found.
+  										</TableCell>
+  									</TableRow>
+  								)}
+  							</TableBody>
+  						</Table>
+  					</CardContent>
+  				</Card>
+  			</div>
+
+  			{/* Edit Dialog */}
+  			<Dialog
+  				open={editingProduct !== null}
+  				onOpenChange={(open) => {
+  					if (!open) setEditingProduct(null);
+  				}}
+  			>
+  				<DialogContent className="sm:max-w-lg">
+  					<DialogHeader>
+  						<DialogTitle>Edit Product</DialogTitle>
+  						<DialogDescription>
+  							Update the product details below.
+  						</DialogDescription>
+  					</DialogHeader>
+
+  					<div className="space-y-4 py-4">
+  						<div className="space-y-2">
+  							<Label htmlFor="edit-name">Name</Label>
+  							<Input
+  								id="edit-name"
+  								value={editForm.name}
+  								onChange={(e) =>
+  									setEditForm((prev) => ({ ...prev, name: e.target.value }))
+  								}
+  							/>
+  						</div>
+
+  						<div className="space-y-2">
+  							<Label htmlFor="edit-description">Description</Label>
+  							<Textarea
+  								id="edit-description"
+  								value={editForm.description}
+  								onChange={(e) =>
+  									setEditForm((prev) => ({
+  										...prev,
+  										description: e.target.value,
+  									}))
+  								}
+  							/>
+  						</div>
+
+  						<div className="space-y-2">
+  							<Label htmlFor="edit-price">Price</Label>
+  							<Input
+  								id="edit-price"
+  								type="number"
+  								step="0.01"
+  								value={editForm.price}
+  								onChange={(e) =>
+  									setEditForm((prev) => ({ ...prev, price: e.target.value }))
+  								}
+  							/>
+  						</div>
+
+  						<div className="space-y-2">
+  							<Label>Badge</Label>
+  							<Select
+  								value={editForm.badge}
+  								onValueChange={(value) =>
+  									setEditForm((prev) => ({ ...prev, badge: value ?? "none" }))
+  								}
+  							>
+  								<SelectTrigger className="w-full">
+  									<SelectValue />
+  								</SelectTrigger>
+  								<SelectContent>
+  									<SelectItem value="none">None</SelectItem>
+  									<SelectItem value="New">New</SelectItem>
+  									<SelectItem value="Sale">Sale</SelectItem>
+  									<SelectItem value="Featured">Featured</SelectItem>
+  									<SelectItem value="Limited">Limited</SelectItem>
+  								</SelectContent>
+  							</Select>
+  						</div>
+
+  						<div className="space-y-2">
+  							<Label>Inventory Status</Label>
+  							<Select
+  								value={editForm.inventory}
+  								onValueChange={(value) =>
+  									setEditForm((prev) => ({
+  										...prev,
+  										inventory: value as InventoryValue,
+  									}))
+  								}
+  							>
+  								<SelectTrigger className="w-full">
+  									<SelectValue />
+  								</SelectTrigger>
+  								<SelectContent>
+  									<SelectItem value="in-stock">In Stock</SelectItem>
+  									<SelectItem value="backorder">Backorder</SelectItem>
+  									<SelectItem value="preorder">Preorder</SelectItem>
+  								</SelectContent>
+  							</Select>
+  						</div>
+
+  						{/* Image field */}
+  						<div className="space-y-2">
+  							<Label>Product Image</Label>
+  							<div className="flex items-center gap-4">
+  								<img
+  									src={imagePreview ?? editingProduct?.image ?? ""}
+  									alt="Product"
+  									className="h-20 w-20 rounded-lg object-cover border"
+  								/>
+  								<div className="flex flex-col gap-2">
+  									{!imagePreview && (
+  										<label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-muted">
+  											Change image
+  											<input
+  												type="file"
+  												accept="image/*"
+  												onChange={handleImageSelect}
+  												className="hidden"
+  											/>
+  										</label>
+  									)}
+  									{imagePreview && (
+  										<Button
+  											type="button"
+  											variant="outline"
+  											size="sm"
+  											onClick={() => {
+  												setImagePreview(null);
+  												setCompressedFile(null);
+  											}}
+  										>
+  											Undo change
+  										</Button>
+  									)}
+  								</div>
+  							</div>
+  							<p className="text-xs text-muted-foreground">
+  								{imagePreview
+  									? "New image selected — will upload on save."
+  									: "Leave unchanged to keep the current image."}
+  							</p>
+  						</div>
+  					</div>
+
+  					<DialogFooter>
+  						<Button
+  							variant="outline"
+  							onClick={() => setEditingProduct(null)}
+  							disabled={isSaving}
+  						>
+  							Cancel
+  						</Button>
+  						<Button onClick={handleSave} disabled={isSaving}>
+  							{isSaving ? "Saving..." : "Save Changes"}
+  						</Button>
+  					</DialogFooter>
+  				</DialogContent>
+  			</Dialog>
+
+  			{/* Delete AlertDialog */}
+  			<AlertDialog
+  				open={deletingProduct !== null}
+  				onOpenChange={(open) => {
+  					if (!open) setDeletingProduct(null);
+  				}}
+  			>
+  				<AlertDialogContent>
+  					<AlertDialogHeader>
+  						<AlertDialogTitle>Delete Product</AlertDialogTitle>
+  						<AlertDialogDescription>
+  							Are you sure you want to delete{" "}
+  							<span className="font-semibold">{deletingProduct?.name}</span>?
+  							This action cannot be undone.
+  						</AlertDialogDescription>
+  					</AlertDialogHeader>
+  					<AlertDialogFooter>
+  						<AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+  						<AlertDialogAction
+  							onClick={handleDelete}
+  							disabled={isDeleting}
+  							className="bg-red-600 hover:bg-red-700"
+  						>
+  							{isDeleting ? "Deleting..." : "Delete"}
+  						</AlertDialogAction>
+  					</AlertDialogFooter>
+  				</AlertDialogContent>
+  			</AlertDialog>
+  		</div>
+  	);
+  }
+  ```
+
+- [x] <a id="p11-s3"></a>**Step 3 — Add link in the Header** `src/components/Header.tsx` 🔗
+
+  The user menu already had the "Create Product" link. Add "Manage Products" right below it, inside the same `admin` role conditional block:
+
+  ```tsx
+  {session?.user.role === "admin" && (
+  	<>
+  		<Link
+  			to="/products/create-product"
+  			onClick={() => setIsUserMenuOpen(false)}
+  			className="mt-2 block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+  		>
+  			Create Product
+  		</Link>
+  		<Link
+  			to="/products/manage-products"
+  			onClick={() => setIsUserMenuOpen(false)}
+  			className="mt-2 block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+  		>
+  			Manage Products
+  		</Link>
+  	</>
+  )}
+  ```
+
+  Both links are only rendered when `session?.user.role === "admin"`. If the role doesn't match, the entire block is skipped.
+
+- [x] <a id="p11-s4"></a>**Step 4 — Create `updateProduct` and `deleteProduct`** `src/data/products.ts` 🛠️
+
+  Add these two server functions at the bottom of `src/data/products.ts`:
+
+  > **`updateProduct`** uses `productSchema.partial()` — all fields are optional except `id`. Only the fields the admin sends are included in the DB `SET`. **`deleteProduct`** receives only the `id` and deletes the product. Both verify session and admin role before touching the DB.
+
+  ```ts
+  const updateProductSchema = productSchema.partial().extend({
+  	id: z.string().min(1, "Product ID is required"),
+  });
+
+  export const updateProduct = createServerFn({ method: "POST" })
+  	.inputValidator((data: z.infer<typeof updateProductSchema>) =>
+  		updateProductSchema.parse(data),
+  	)
+  	.handler(async ({ data }) => {
+  		const session = await getSession();
+  		if (!session) throw new Error("Unauthorized");
+  		if (session.user.role !== "admin") throw new Error("Forbidden");
+
+  		const { db } = await import("@/db");
+  		const { id, ...values } = data;
+
+  		const updateData: Record<string, unknown> = {};
+  		if (values.name !== undefined) updateData.name = values.name;
+  		if (values.description !== undefined)
+  			updateData.description = values.description;
+  		if (values.price !== undefined) updateData.price = values.price;
+  		if (values.image !== undefined) updateData.image = values.image;
+  		if (values.inventory !== undefined) updateData.inventory = values.inventory;
+  		if (values.badge !== undefined) updateData.badge = values.badge ?? null;
+
+  		const result = await db
+  			.update(products)
+  			.set(updateData)
+  			.where(eq(products.id, id))
+  			.returning();
+
+  		const product = result[0];
+  		if (!product) throw new Error("Product not found");
+  		return product;
+  	});
+
+  export const deleteProduct = createServerFn({ method: "POST" })
+  	.inputValidator((data: { id: string }) => data)
+  	.handler(async ({ data }) => {
+  		const session = await getSession();
+  		if (!session) throw new Error("Unauthorized");
+  		if (session.user.role !== "admin") throw new Error("Forbidden");
+
+  		const { db } = await import("@/db");
+  		await db.delete(products).where(eq(products.id, data.id));
+  	});
+  ```
+
+  The `updateData: Record<string, unknown>` pattern builds the update object dynamically — only fields present in the payload are included in Drizzle's `SET`. This avoids accidentally overwriting fields the admin didn't touch.
+
+- [x] <a id="p11-s5"></a>**Step 5 — Connect server functions in `manage-products.tsx`** ⚡
+
+  Replace the imports from Step 2 and the `handleSave` / `handleDelete` handlers (the ones with `console.log`) with the real server functions:
+
+  **Updated imports:**
+
+  ```ts
+  import { toast } from "sonner";
+  import {
+  	getAllProducts,
+  	updateProduct,
+  	deleteProduct,
+  	uploadProductImage,
+  } from "@/data/products";
+  import type { BadgeValue, InventoryValue, ProductSelect } from "@/db/schema";
+  ```
+
+  **`handleSave` — optional image upload + update:**
+
+  ```ts
+  async function handleSave() {
+  	if (!editingProduct) return;
+  	setIsSaving(true);
+
+  	try {
+  		let imageUrl: string | undefined;
+
+  		if (compressedFile) {
+  			const base64 = await new Promise<string>((resolve, reject) => {
+  				const reader = new FileReader();
+  				reader.onload = () => resolve(reader.result as string);
+  				reader.onerror = reject;
+  				reader.readAsDataURL(compressedFile);
+  			});
+
+  			const { url } = await uploadProductImage({
+  				data: {
+  					fileBase64: base64,
+  					fileName: compressedFile.name,
+  				},
+  			});
+  			imageUrl = url;
+  		}
+
+  		await updateProduct({
+  			data: {
+  				id: editingProduct.id,
+  				name: editForm.name,
+  				description: editForm.description,
+  				price: editForm.price,
+  				badge:
+  					editForm.badge === "none"
+  						? undefined
+  						: (editForm.badge as BadgeValue),
+  				inventory: editForm.inventory as InventoryValue,
+  				...(imageUrl ? { image: imageUrl } : {}),
+  			},
+  		});
+
+  		await router.invalidate();
+  		setEditingProduct(null);
+  		toast.success("Product updated successfully.");
+  	} catch {
+  		toast.error("Failed to update product. Please try again.");
+  	} finally {
+  		setIsSaving(false);
+  	}
+
+  	setIsSaving(false);
+  	setEditingProduct(null);
+  }
+  ```
+
+  **`handleDelete` — delete with confirmation:**
+
+  ```ts
+  async function handleDelete() {
+  	if (!deletingProduct) return;
+  	setIsDeleting(true);
+
+  	try {
+  		await deleteProduct({ data: { id: deletingProduct.id } });
+  		await router.invalidate();
+  		setDeletingProduct(null);
+  		toast.success("Product deleted successfully.");
+  	} catch {
+  		toast.error("Failed to delete product. Please try again.");
+  	} finally {
+  		setIsDeleting(false);
+  	}
+
+  	setIsDeleting(false);
+  	setDeletingProduct(null);
+  }
+  ```
+
+  `router.invalidate()` forces the loader to re-run — the table updates with fresh DB data without a full page reload. If the image didn't change (`compressedFile` is `null`), the spread `...(imageUrl ? { image: imageUrl } : {})` omits the `image` field from the payload, and `updateProduct` leaves the original URL untouched.
+
+---
+

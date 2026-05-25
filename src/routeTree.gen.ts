@@ -15,6 +15,7 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
+import { Route as ProductsManageProductsRouteImport } from './routes/products/manage-products'
 import { Route as ProductsCreateProductRouteImport } from './routes/products/create-product'
 import { Route as ProductsIdRouteImport } from './routes/products/$id'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -49,6 +50,11 @@ const ProductsIndexRoute = ProductsIndexRouteImport.update({
   path: '/products/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProductsManageProductsRoute = ProductsManageProductsRouteImport.update({
+  id: '/products/manage-products',
+  path: '/products/manage-products',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProductsCreateProductRoute = ProductsCreateProductRouteImport.update({
   id: '/products/create-product',
   path: '/products/create-product',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof SignUpRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
+  '/products/manage-products': typeof ProductsManageProductsRoute
   '/products/': typeof ProductsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/sign-up': typeof SignUpRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
+  '/products/manage-products': typeof ProductsManageProductsRoute
   '/products': typeof ProductsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/sign-up': typeof SignUpRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
+  '/products/manage-products': typeof ProductsManageProductsRoute
   '/products/': typeof ProductsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/products/$id'
     | '/products/create-product'
+    | '/products/manage-products'
     | '/products/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/products/$id'
     | '/products/create-product'
+    | '/products/manage-products'
     | '/products'
     | '/api/auth/$'
   id:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/products/$id'
     | '/products/create-product'
+    | '/products/manage-products'
     | '/products/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -143,6 +155,7 @@ export interface RootRouteChildren {
   SignUpRoute: typeof SignUpRoute
   ProductsIdRoute: typeof ProductsIdRoute
   ProductsCreateProductRoute: typeof ProductsCreateProductRoute
+  ProductsManageProductsRoute: typeof ProductsManageProductsRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/products/manage-products': {
+      id: '/products/manage-products'
+      path: '/products/manage-products'
+      fullPath: '/products/manage-products'
+      preLoaderRoute: typeof ProductsManageProductsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/products/create-product': {
       id: '/products/create-product'
       path: '/products/create-product'
@@ -223,6 +243,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignUpRoute: SignUpRoute,
   ProductsIdRoute: ProductsIdRoute,
   ProductsCreateProductRoute: ProductsCreateProductRoute,
+  ProductsManageProductsRoute: ProductsManageProductsRoute,
   ProductsIndexRoute: ProductsIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

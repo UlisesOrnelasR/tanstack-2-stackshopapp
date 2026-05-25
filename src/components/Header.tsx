@@ -119,15 +119,23 @@ export default function Header() {
 										Profile
 									</Link>
 									{session?.user.role === "admin" && (
-										<Link
-											to="/products/create-product"
-											onClick={() => setIsUserMenuOpen(false)}
-											className="mt-2 block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-										>
-											Create Product
-										</Link>
+										<>
+											<Link
+												to="/products/create-product"
+												onClick={() => setIsUserMenuOpen(false)}
+												className="mt-2 block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+											>
+												Create Product
+											</Link>
+											<Link
+												to="/products/manage-products"
+												onClick={() => setIsUserMenuOpen(false)}
+												className="mt-2 block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+											>
+												Manage Products
+											</Link>
+										</>
 									)}
-
 									<button
 										type="button"
 										onClick={() => {
