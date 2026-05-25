@@ -1671,6 +1671,7 @@ This is a living document. Each step gets checked off as it's done.
     queryKey: cartCountQueryKey,   // ["cart-count"]
     queryFn: () => getCartItemsCount(),
     staleTime: 0,                  // always considered stale → refetch on window focus
+    refetchInterval: 60_000,       // background refetch every 60 seconds
   });
 
   const itemCount = cartSummary?.count ?? 0;
@@ -1678,6 +1679,8 @@ This is a living document. Each step gets checked off as it's done.
   ```
 
   `staleTime: 0` means the cached value is immediately considered stale after it's fetched. This makes React Query refetch automatically the next time the user focuses the window — a useful safety net if the cache ever gets out of sync.
+
+  `refetchInterval: 60_000` adds a second layer: even if the user never leaves the tab, the badge silently re-syncs with the server every minute. This covers edge cases like another browser tab or device mutating the cart without triggering an explicit `invalidateQueries` in the current tab.
 
   ***
 

@@ -20,6 +20,7 @@ export default function Header() {
 		queryKey: cartCountQueryKey,
 		queryFn: () => getCartItemsCount(),
 		staleTime: 0,
+		refetchInterval: 60_000, // every minute (60_000 ms) refetch the cart
 	});
 
 	const itemCount = cartSummary?.count ?? 0;
