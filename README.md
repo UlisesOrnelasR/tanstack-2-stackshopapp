@@ -14,6 +14,7 @@
 - [👤 Demo users](#demo-users)
 - [📁 Project Structure](#project-structure)
 - [🗄️ Database Schema](#database-schema)
+- [🔐 Environment Variables](#environment-variables)
 
 **Build Log**
 - [🏗️ Phase 1 — Project Foundation](#phase-1)
@@ -233,6 +234,34 @@ src/
 | `updated_at` | `timestamp` | Updated on quantity change |
 
 > Types are derived via Drizzle's `$inferSelect` / `$inferInsert` — no manual interfaces needed.
+
+---
+
+<a id="environment-variables"></a>
+
+## 🔐 Environment Variables
+
+Create a `.env` file at the project root with the following variables:
+
+```env
+DATABASE_URL="postgresql://postgres.fceond?????????:?????????@aws-1-us-?????????-?????????.pooler.supabase.com:?????????/postgres"
+BETTER_AUTH_SECRET=MYtcOnjaZUd....
+BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
+
+SUPABASE_URL=https://fceond?????????.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+STRIPE_SECRET_KEY=
+```
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | ✅ | PostgreSQL connection string (Supabase session pooler) |
+| `BETTER_AUTH_SECRET` | ✅ | Signs and verifies session tokens — keep this secret |
+| `BETTER_AUTH_URL` | ✅ | Base URL used by Better Auth for redirects and callbacks |
+| `SUPABASE_URL` | ✅ | Supabase project URL — used by the storage client |
+| `SUPABASE_ANON_KEY` | ✅ | Public anon key for Supabase Storage operations |
+| `STRIPE_SECRET_KEY` | ✅ | Stripe secret key for Checkout session creation |
 
 ---
 
