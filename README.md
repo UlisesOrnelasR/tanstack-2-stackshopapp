@@ -100,6 +100,19 @@
   - [Step 3 — Add link in the Header](#p11-s3)
   - [Step 4 — Create `updateProduct` and `deleteProduct`](#p11-s4)
   - [Step 5 — Connect server functions in `manage-products.tsx`](#p11-s5)
+- [💳 Phase 12 — Stripe Checkout & Order History](#phase-12)
+  - [Step 1 — Install Stripe & add environment variable](#p12-s1)
+  - [Step 2 — Add orders and order_items tables to the schema](#p12-s2)
+  - [Step 3 — Generate & push the new schema to Supabase](#p12-s3)
+  - [Step 4 — Create /checkout/success route (layout)](#p12-s4)
+  - [Step 5 — Create /checkout/cancel route (layout)](#p12-s5)
+  - [Step 6 — Create src/data/checkout.ts](#p12-s6)
+  - [Step 7 — Wire the Checkout button in cart.tsx](#p12-s7)
+  - [Step 8 — Connect /checkout/success to confirmOrder](#p12-s8)
+  - [Step 9 — Add "My Orders" link in the Header](#p12-s9)
+  - [Step 10 — Create /orders route (layout with mock data)](#p12-s10)
+  - [Step 11 — Create src/data/orders.ts](#p12-s11)
+  - [Step 12 — Connect /orders to real data](#p12-s12)
 
 ---
 
@@ -3362,6 +3375,845 @@ Admin page for editing and deleting products from the catalog. Uses TanStack Tab
   ```
 
   `router.invalidate()` forces the loader to re-run — the table updates with fresh DB data without a full page reload. If the image didn't change (`compressedFile` is `null`), the spread `...(imageUrl ? { image: imageUrl } : {})` omits the `image` field from the payload, and `updateProduct` leaves the original URL untouched.
+
+---
+
+<a id="phase-12"></a>
+
+### Phase 12 — Stripe Checkout & Order History
+
+![phase12](./assets/phase_12_stripe_checkout_flow.svg)
+![cards](./assets/stripe_test_cards_reference.svg)
+
+How it works: When the user clicks "Checkout", the server creates a pending order in the database with a snapshot of the cart items, then creates a Stripe Checkout Session with those products. Stripe returns a URL and the user gets redirected there. Stripe handles everything (card, security, receipt). After payment, Stripe redirects the user back to the app — the success page verifies the payment with Stripe's API, updates the order status to "paid", and clears the cart. The user can then view all their past orders on the `/orders` page.
+
+- [x] <a id="p12-s1"></a>**Step 1 — Install Stripe & add environment variable**
+
+  1) Install the package:
+
+  ```bash
+  npm i stripe
+  ```
+
+  2) Open your `.env` file and add this line at the bottom:
+
+  ```env
+  STRIPE_SECRET_KEY=sk_test_your_full_secret_key_here
+  ```
+
+  The secret key is used server-side only (in your server function). The public key is only needed if you use Stripe Elements later — for Checkout Sessions we only need the secret key, but it's good to have both stored.
+
+- [x] <a id="p12-s2"></a>**Step 2 — Add `orders` and `order_items` tables to the schema**
+
+  Open `src/db/schema.ts` and paste this at the very bottom of the file, after the existing `cartItems` table and its types:
+
+  ```ts
+  // --- Phase 12: Orders ---
+
+  const orderStatusValues = ["pending", "paid", "failed"] as const;
+  export const orderStatusEnum = pgEnum("order_status", orderStatusValues);
+  ```
+
+  `as const` tells TypeScript these are the only possible values — not just any string. Without it, TypeScript sees `string[]`. With it, TypeScript sees exactly `"pending" | "paid" | "failed"`. Then `pgEnum` creates a PostgreSQL enum type so the database also only accepts these three values. Same pattern you already use for `badgeEnum` and `inventoryEnum`.
+
+  ```ts
+  export const orders = pgTable("orders", {
+  	id: uuid("id").primaryKey().defaultRandom(),
+  	userId: text("user_id")
+  		.notNull()
+  		.references(() => user.id, { onDelete: "cascade" }),
+  	stripeSessionId: text("stripe_session_id"),
+  	status: orderStatusEnum("status").notNull().default("pending"),
+  	total: numeric("total", { precision: 10, scale: 2 }).notNull(),
+  	createdAt: timestamp("created_at").defaultNow().notNull(),
+  });
+
+  export const orderItems = pgTable("order_items", {
+  	id: uuid("id").primaryKey().defaultRandom(),
+  	orderId: uuid("order_id")
+  		.notNull()
+  		.references(() => orders.id, { onDelete: "cascade" }),
+  	productId: uuid("product_id").references(() => products.id, {
+  		onDelete: "set null",
+  	}),
+  	name: varchar("name", { length: 256 }).notNull(),
+  	price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+  	quantity: integer("quantity").notNull(),
+  	image: varchar("image", { length: 512 }).notNull(),
+  });
+
+  export type OrderSelect = typeof orders.$inferSelect;
+  export type OrderInsert = typeof orders.$inferInsert;
+  export type OrderItemSelect = typeof orderItems.$inferSelect;
+  export type OrderItemInsert = typeof orderItems.$inferInsert;
+  ```
+
+  Drizzle reads your table definition and creates the type automatically with `$inferSelect`. Less code, and if you add a column to the table later, the type updates itself.
+
+  Two versions:
+  - `$inferSelect` → "what does a row look like when I read from the DB?" — all columns are present
+  - `$inferInsert` → "what do I need to send when I write to the DB?" — columns with defaults (`id`, `createdAt`) are optional because the database fills them in
+
+- [x] <a id="p12-s3"></a>**Step 3 — Generate & push the new schema**
+
+  Run these two commands in order:
+
+  ```bash
+  npm run db:generate
+  ```
+
+  Then:
+
+  ```bash
+  npm run db:push
+  ```
+
+  After both finish, go to your Supabase Dashboard → Table Editor — you should see two new tables: `orders` and `order_items`.
+
+- [x] <a id="p12-s4"></a>**Step 4 — Create `/checkout/success` route (layout)**
+
+  Create the file `src/routes/checkout/success.tsx`:
+
+  ```tsx
+  import { Link, createFileRoute } from "@tanstack/react-router";
+  import { Button } from "#/components/ui/button";
+  import { CheckCircle } from "lucide-react";
+
+  export const Route = createFileRoute("/checkout/success")({
+  	component: CheckoutSuccess,
+  });
+
+  function CheckoutSuccess() {
+  	// TODO: Step 8 — connect to confirmOrder to verify payment and clear cart
+
+  	return (
+  		<div className="mx-auto max-w-lg py-20 text-center">
+  			<div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+  				<CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+  			</div>
+
+  			<h1 className="mt-6 text-2xl font-bold">Payment successful!</h1>
+
+  			<p className="mt-2 text-slate-600 dark:text-slate-300">
+  				Thank you for your purchase. Your order is being processed.
+  			</p>
+
+  			<div className="mt-8 flex items-center justify-center gap-3">
+  				<Link to="/orders">
+  					<Button variant="outline">View my orders</Button>
+  				</Link>
+
+  				<Link to="/products">
+  					<Button>Continue shopping</Button>
+  				</Link>
+  			</div>
+  		</div>
+  	);
+  }
+  ```
+
+- [x] <a id="p12-s5"></a>**Step 5 — Create `/checkout/cancel` route (layout)**
+
+  Create the file `src/routes/checkout/cancel.tsx`:
+
+  ```tsx
+  import { Link, createFileRoute } from "@tanstack/react-router";
+  import { XCircle } from "lucide-react";
+  import { Button } from "#/components/ui/button";
+
+  export const Route = createFileRoute("/checkout/cancel")({
+  	component: CheckoutCancel,
+  });
+
+  function CheckoutCancel() {
+  	return (
+  		<div className="mx-auto max-w-lg py-20 text-center">
+  			<div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
+  				<XCircle className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+  			</div>
+
+  			<h1 className="mt-6 text-2xl font-bold">Payment cancelled</h1>
+
+  			<p className="mt-2 text-slate-600 dark:text-slate-300">
+  				No worries — your cart is still saved. Come back whenever you're ready.
+  			</p>
+
+  			<div className="mt-8 flex items-center justify-center gap-3">
+  				<Link to="/cart">
+  					<Button variant="outline">Back to cart</Button>
+  				</Link>
+
+  				<Link to="/products">
+  					<Button>Browse products</Button>
+  				</Link>
+  			</div>
+  		</div>
+  	);
+  }
+  ```
+
+- [x] <a id="p12-s6"></a>**Step 6 — Create `src/data/checkout.ts`**
+
+  ```ts
+  import { createServerFn } from "@tanstack/react-start";
+  import { eq } from "drizzle-orm";
+  import { cartItems, orderItems, orders, products } from "#/db/schema";
+  import { getSession } from "#/lib/auth.functions";
+
+  export const createCheckoutSession = createServerFn({ method: "POST" }).handler(
+  	async () => {
+  		const session = await getSession();
+  		if (!session) {
+  			throw new Error("You must be logged in to checkout");
+  		}
+
+  		const { db } = await import("@/db");
+  		const Stripe = (await import("stripe")).default;
+
+  		const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
+
+  		// 1. Fetch cart items with product details
+  		const rows = await db
+  			.select()
+  			.from(cartItems)
+  			.innerJoin(products, eq(cartItems.productId, products.id));
+
+  		if (rows.length === 0) {
+  			throw new Error("Cart is empty");
+  		}
+
+  		// 2. Calculate total
+  		const total = rows.reduce(
+  			(acc, row) => acc + Number(row.products.price) * row.cart_items.quantity,
+  			0,
+  		);
+
+  		// 3. Create a pending order in the DB
+  		const [order] = await db
+  			.insert(orders)
+  			.values({
+  				userId: session.user.id,
+  				total: total.toFixed(2),
+  				status: "pending",
+  			})
+  			.returning();
+
+  		if (!order) {
+  			throw new Error("Failed to create order");
+  		}
+
+  		// 4. Insert order items (snapshot of product data at time of purchase)
+  		await db.insert(orderItems).values(
+  			rows.map((row) => ({
+  				orderId: order.id,
+  				productId: row.products.id,
+  				name: row.products.name,
+  				price: row.products.price,
+  				quantity: row.cart_items.quantity,
+  				image: row.products.image,
+  			})),
+  		);
+
+  		// 5. Build line_items for Stripe
+  		const line_items = rows.map((row) => ({
+  			price_data: {
+  				currency: "usd",
+  				product_data: {
+  					name: row.products.name,
+  					description: row.products.description,
+  					...(row.products.image.startsWith("http")
+  						? { images: [row.products.image] }
+  						: {}),
+  				},
+  				unit_amount: Math.round(Number(row.products.price) * 100),
+  			},
+  			quantity: row.cart_items.quantity,
+  		}));
+
+  		// 6. Create Stripe Checkout Session
+  		const checkoutSession = await stripe.checkout.sessions.create({
+  			mode: "payment",
+  			payment_method_types: ["card"],
+  			line_items,
+  			success_url: `${process.env.BETTER_AUTH_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+  			cancel_url: `${process.env.BETTER_AUTH_URL}/checkout/cancel`,
+  			metadata: {
+  				orderId: order.id,
+  			},
+  		});
+
+  		// 7. Save the Stripe session ID in our order
+  		await db
+  			.update(orders)
+  			.set({ stripeSessionId: checkoutSession.id })
+  			.where(eq(orders.id, order.id));
+
+  		if (!checkoutSession.url) {
+  			throw new Error("Stripe did not return a checkout URL");
+  		}
+
+  		return { url: checkoutSession.url };
+  	},
+  );
+
+  // Called from /checkout/success to verify payment and finalize the order
+  export const confirmOrder = createServerFn({ method: "POST" })
+  	.inputValidator((data: { sessionId: string }) => data)
+  	.handler(async ({ data }) => {
+  		const session = await getSession();
+  		if (!session) {
+  			throw new Error("Unauthorized");
+  		}
+
+  		const { db } = await import("@/db");
+  		const Stripe = (await import("stripe")).default;
+
+  		const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
+
+  		// 1. Verify payment with Stripe
+  		const checkoutSession = await stripe.checkout.sessions.retrieve(
+  			data.sessionId,
+  		);
+
+  		if (checkoutSession.payment_status !== "paid") {
+  			throw new Error("Payment not completed");
+  		}
+
+  		// 2. Find the order by Stripe session ID
+  		const [order] = await db
+  			.select()
+  			.from(orders)
+  			.where(eq(orders.stripeSessionId, data.sessionId))
+  			.limit(1);
+
+  		if (!order) {
+  			throw new Error("Order not found");
+  		}
+
+  		// 3. Only update if still pending (avoid double-processing)
+  		if (order.status === "pending") {
+  			await db
+  				.update(orders)
+  				.set({ status: "paid" })
+  				.where(eq(orders.id, order.id));
+
+  			// 4. Clear the cart
+  			await db.delete(cartItems);
+  		}
+
+  		return { orderId: order.id, status: "paid" as const };
+  	});
+  ```
+
+  This file has two functions:
+
+  - `createCheckoutSession` — the user clicks Checkout → this creates a pending order in the DB, saves a snapshot of the cart items, sends the products to Stripe, and returns the payment URL.
+  - `confirmOrder` — after the user pays and returns to `/checkout/success` → this asks Stripe "did they actually pay?", updates the order to "paid", and clears the cart. We'll connect this in Step 8.
+
+  The `unit_amount` uses `* 100` because Stripe works in cents — $99.99 becomes 9999.
+
+- [x] <a id="p12-s7"></a>**Step 7 — Wire the Checkout button in `cart.tsx`**
+
+  Open `src/routes/cart.tsx` and make three changes:
+
+  1) Add this import at the top (next to your other imports):
+
+  ```ts
+  import { createCheckoutSession } from "@/data/checkout";
+  ```
+
+  2) Add this state (next to your other `useState` calls inside `CartPage`):
+
+  ```ts
+  const [checkingOut, setCheckingOut] = useState(false);
+  ```
+
+  3) Find the current Checkout button and replace it with:
+
+  ```tsx
+  <Button
+  	className="mt-5 w-full"
+  	type="button"
+  	disabled={checkingOut}
+  	onClick={async () => {
+  		setCheckingOut(true);
+  		try {
+  			const { url } = await createCheckoutSession();
+  			window.location.href = url;
+  		} catch (error) {
+  			toast.error(
+  				error instanceof Error
+  					? error.message
+  					: "Failed to start checkout. Please try again.",
+  			);
+  			setCheckingOut(false);
+  		}
+  	}}
+  >
+  	{checkingOut ? "Redirecting to Stripe..." : "Checkout"}
+  </Button>
+  ```
+
+  When the user clicks Checkout: the button disables and shows "Redirecting to Stripe...", calls the server function to create the order and Stripe session, then redirects the browser to Stripe's payment page. If something fails (not logged in, empty cart), it shows a toast error.
+
+  Notice we don't call `setCheckingOut(false)` on success — because the browser is navigating away to Stripe, so the component is about to unmount anyway.
+
+  The `error instanceof Error` check is asking: "is this a real Error object with a `.message` property?"
+
+  If yes, it shows the specific message from your server function. These are the possible ones you defined in `checkout.ts`:
+  - `"You must be logged in to checkout"` — user not logged in
+  - `"Cart is empty"` — no items in cart
+  - `"Failed to create order"` — database issue
+  - `"Stripe did not return a checkout URL"` — Stripe issue
+
+  If no (something unexpected happened that isn't a standard Error), it shows the generic fallback: `"Failed to start checkout. Please try again."`
+
+- [x] <a id="p12-s8"></a>**Step 8 — Connect `/checkout/success` to `confirmOrder`**
+
+  Open `src/routes/checkout/success.tsx`. Here are the changes:
+
+  1) Replace the imports at the top with:
+
+  ```ts
+  import { Link, createFileRoute } from "@tanstack/react-router";
+  import { Button } from "#/components/ui/button";
+  import { CheckCircle, Loader2 } from "lucide-react";
+  import { useEffect, useRef, useState } from "react";
+  import { useQueryClient } from "@tanstack/react-query";
+  import { confirmOrder } from "#/data/checkout";
+  import { cartCountQueryKey } from "#/components/Header";
+  ```
+
+  You're adding: `Loader2` (spinner icon), `useEffect`, `useRef`, `useState`, `useQueryClient`, `confirmOrder`, and `cartCountQueryKey`.
+
+  2) Replace the `CheckoutSuccess` function with:
+
+  ```tsx
+  function CheckoutSuccess() {
+  	const queryClient = useQueryClient();
+  	const confirmed = useRef(false);
+  	const [status, setStatus] = useState<"loading" | "success" | "error">(
+  		"loading",
+  	);
+
+  	// Runs once when the page loads — verifies payment with Stripe
+  	useEffect(() => {
+  		if (confirmed.current) return;
+  		confirmed.current = true;
+
+  		const params = new URLSearchParams(window.location.search);
+  		const sessionId = params.get("session_id");
+
+  		if (!sessionId) {
+  			setStatus("error");
+  			return;
+  		}
+
+  		confirmOrder({ data: { sessionId } })
+  			.then(() => {
+  				queryClient.invalidateQueries({ queryKey: cartCountQueryKey });
+  				setStatus("success");
+  			})
+  			.catch(() => {
+  				setStatus("error");
+  			});
+  	}, [queryClient]);
+
+  	if (status === "loading") {
+  		return (
+  			<div className="mx-auto max-w-lg py-20 text-center">
+  				<Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-400" />
+  				<p className="mt-4 text-slate-600 dark:text-slate-300">
+  					Verifying your payment...
+  				</p>
+  			</div>
+  		);
+  	}
+
+  	if (status === "error") {
+  		return (
+  			<div className="mx-auto max-w-lg py-20 text-center">
+  				<h1 className="text-2xl font-bold">Something went wrong</h1>
+  				<p className="mt-2 text-slate-600 dark:text-slate-300">
+  					We couldn't verify your payment. If you were charged, please contact
+  					support.
+  				</p>
+  				<Link to="/products" className="mt-6 inline-block">
+  					<Button>Back to products</Button>
+  				</Link>
+  			</div>
+  		);
+  	}
+
+  	return (
+  		<div className="mx-auto max-w-lg py-20 text-center">
+  			<div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+  				<CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+  			</div>
+
+  			<h1 className="mt-6 text-2xl font-bold">Payment successful!</h1>
+
+  			<p className="mt-2 text-slate-600 dark:text-slate-300">
+  				Thank you for your purchase. Your order is being processed.
+  			</p>
+
+  			<div className="mt-8 flex items-center justify-center gap-3">
+  				<Link to="/orders">
+  					<Button variant="outline">View my orders</Button>
+  				</Link>
+
+  				<Link to="/products">
+  					<Button>Continue shopping</Button>
+  				</Link>
+  			</div>
+  		</div>
+  	);
+  }
+  ```
+
+  What happens when the user lands on this page after paying:
+
+  1. The page starts in `loading` state — shows a spinner and "Verifying your payment..."
+  2. It reads `session_id` from the URL (Stripe put it there via the `{CHECKOUT_SESSION_ID}` template)
+  3. Calls `confirmOrder` which asks Stripe "did they actually pay?", updates the order to "paid", and clears the cart
+  4. Updates the cart badge in the Header (now shows 0)
+  5. Switches to `success` state — shows the green checkmark
+
+  `useRef(confirmed)` prevents the function from running twice — React Strict Mode in dev calls `useEffect` twice, and the ref ensures we only verify the payment once.
+
+- [x] <a id="p12-s9"></a>**Step 9 — Add "My Orders" link in the Header**
+
+  Open `src/components/Header.tsx`. Find the Profile link inside the user dropdown, and add this right after it:
+
+  ```tsx
+  <Link
+  	to="/orders"
+  	onClick={() => setIsUserMenuOpen(false)}
+  	className="block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+  >
+  	My Orders
+  </Link>
+  ```
+
+  This link is visible to all logged-in users, not just admins — that's why it goes outside the admin conditional block.
+
+- [x] <a id="p12-s10"></a>**Step 10 — Create `/orders` route (layout with mock data)**
+
+  Create the file `src/routes/orders.tsx`:
+
+  ```tsx
+  import { createFileRoute, Link } from "@tanstack/react-router";
+  import { Package } from "lucide-react";
+  import { Button } from "#/components/ui/button";
+  import {
+  	Empty,
+  	EmptyContent,
+  	EmptyDescription,
+  	EmptyHeader,
+  	EmptyTitle,
+  } from "@/components/ui/empty";
+
+  export const Route = createFileRoute("/orders")({
+  	// TODO: Step 12 — loader: fetch real orders via getOrdersByUser
+  	component: OrdersPage,
+  });
+
+  // Mock data — same shape as the real DB response will have
+  const mockOrders = [
+  	{
+  		id: "order-1",
+  		status: "paid" as const,
+  		total: "249.98",
+  		createdAt: new Date("2025-06-01T14:30:00"),
+  		items: [
+  			{
+  				id: "item-1",
+  				name: "TanStack Router Pro",
+  				price: "99.99",
+  				quantity: 1,
+  				image: "/tanstack-circle-logo.png",
+  			},
+  			{
+  				id: "item-2",
+  				name: "TanStack Query Enterprise",
+  				price: "149.99",
+  				quantity: 1,
+  				image: "/tanstack-circle-logo.png",
+  			},
+  		],
+  	},
+  	{
+  		id: "order-2",
+  		status: "paid" as const,
+  		total: "79.99",
+  		createdAt: new Date("2025-05-28T09:15:00"),
+  		items: [
+  			{
+  				id: "item-3",
+  				name: "TanStack Table Premium",
+  				price: "79.99",
+  				quantity: 1,
+  				image: "/tanstack-circle-logo.png",
+  			},
+  		],
+  	},
+  ];
+
+  const statusStyles = {
+  	pending:
+  		"bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  	paid: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  	failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  };
+
+  function OrdersPage() {
+  	const orders = mockOrders;
+
+  	if (orders.length === 0) {
+  		return (
+  			<div className="mx-auto max-w-3xl py-16">
+  				<Empty>
+  					<EmptyHeader>
+  						<Package size={40} className="mx-auto text-slate-400" />
+  						<EmptyTitle>No orders yet</EmptyTitle>
+  						<EmptyDescription>
+  							Once you complete a purchase, your orders will appear here.
+  						</EmptyDescription>
+  					</EmptyHeader>
+
+  					<EmptyContent>
+  						<Link to="/products">
+  							<Button>Browse products</Button>
+  						</Link>
+  					</EmptyContent>
+  				</Empty>
+  			</div>
+  		);
+  	}
+
+  	return (
+  		<div className="mx-auto max-w-3xl space-y-6 py-8">
+  			<div>
+  				<h1 className="text-2xl font-semibold">My Orders</h1>
+  				<p className="text-sm text-slate-600 dark:text-slate-300">
+  					Your purchase history.
+  				</p>
+  			</div>
+
+  			<div className="space-y-4">
+  				{orders.map((order) => (
+  					<div
+  						key={order.id}
+  						className="rounded-xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-950/40"
+  					>
+  						<div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+  							<div className="flex items-center gap-4 text-sm">
+  								<span className="text-slate-500">
+  									{order.createdAt.toLocaleDateString("en-US", {
+  										year: "numeric",
+  										month: "short",
+  										day: "numeric",
+  									})}
+  								</span>
+
+  								<span
+  									className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[order.status]}`}
+  								>
+  									{order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+  								</span>
+  							</div>
+
+  							<span className="text-sm font-semibold">
+  								${Number(order.total).toFixed(2)}
+  							</span>
+  						</div>
+
+  						<div className="divide-y divide-slate-100 dark:divide-slate-800">
+  							{order.items.map((item) => (
+  								<div
+  									key={item.id}
+  									className="flex items-center gap-4 px-5 py-3"
+  								>
+  									<div className="flex h-12 w-12 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+  										<img
+  											src={item.image}
+  											alt={item.name}
+  											className="h-8 w-8 object-contain"
+  											loading="lazy"
+  										/>
+  									</div>
+
+  									<div className="flex-1">
+  										<p className="text-sm font-semibold">{item.name}</p>
+  										<p className="text-xs text-slate-500">
+  											Qty: {item.quantity} · ${Number(item.price).toFixed(2)}{" "}
+  											each
+  										</p>
+  									</div>
+
+  									<span className="text-sm font-semibold">
+  										${(Number(item.price) * item.quantity).toFixed(2)}
+  									</span>
+  								</div>
+  							))}
+  						</div>
+  					</div>
+  				))}
+  			</div>
+  		</div>
+  	);
+  }
+  ```
+
+- [x] <a id="p12-s11"></a>**Step 11 — Create `src/data/orders.ts`**
+
+  Create the file `src/data/orders.ts`:
+
+  ```ts
+  import { createServerFn } from "@tanstack/react-start";
+  import { desc, eq } from "drizzle-orm";
+  import { orderItems, orders } from "#/db/schema";
+  import { getSession } from "#/lib/auth.functions";
+
+  // Fetch all orders for the logged-in user (newest first)
+  export const getOrdersByUser = createServerFn({ method: "GET" }).handler(
+  	async () => {
+  		const session = await getSession();
+  		if (!session) {
+  			throw new Error("Unauthorized");
+  		}
+
+  		const { db } = await import("@/db");
+
+  		// Get all orders for this user, newest first
+  		const userOrders = await db
+  			.select()
+  			.from(orders)
+  			.where(eq(orders.userId, session.user.id))
+  			.orderBy(desc(orders.createdAt));
+
+  		if (userOrders.length === 0) return [];
+
+  		// For each order, fetch its items
+  		const ordersWithItems = await Promise.all(
+  			userOrders.map(async (order) => {
+  				const items = await db
+  					.select()
+  					.from(orderItems)
+  					.where(eq(orderItems.orderId, order.id));
+
+  				return {
+  					id: order.id,
+  					status: order.status,
+  					total: order.total,
+  					createdAt: order.createdAt,
+  					items: items.map((item) => ({
+  						id: item.id,
+  						name: item.name,
+  						price: item.price,
+  						quantity: item.quantity,
+  						image: item.image,
+  					})),
+  				};
+  			}),
+  		);
+
+  		return ordersWithItems;
+  	},
+  );
+
+  // Fetch a single order by ID (verifies ownership)
+  export const getOrderById = createServerFn({ method: "GET" })
+  	.inputValidator((data: { orderId: string }) => data)
+  	.handler(async ({ data }) => {
+  		const session = await getSession();
+  		if (!session) {
+  			throw new Error("Unauthorized");
+  		}
+
+  		const { db } = await import("@/db");
+
+  		const [order] = await db
+  			.select()
+  			.from(orders)
+  			.where(eq(orders.id, data.orderId))
+  			.limit(1);
+
+  		if (!order) {
+  			throw new Error("Order not found");
+  		}
+
+  		// Verify the order belongs to the logged-in user
+  		if (order.userId !== session.user.id) {
+  			throw new Error("Forbidden");
+  		}
+
+  		const items = await db
+  			.select()
+  			.from(orderItems)
+  			.where(eq(orderItems.orderId, order.id));
+
+  		return {
+  			id: order.id,
+  			status: order.status,
+  			total: order.total,
+  			createdAt: order.createdAt,
+  			stripeSessionId: order.stripeSessionId,
+  			items: items.map((item) => ({
+  				id: item.id,
+  				name: item.name,
+  				price: item.price,
+  				quantity: item.quantity,
+  				image: item.image,
+  			})),
+  		};
+  	});
+  ```
+
+  Two functions:
+
+  - `getOrdersByUser` — fetches all orders for the logged-in user, newest first. For each order, it also fetches its items. This is what the `/orders` page will use.
+  - `getOrderById` — fetches a single order with its items. It checks that the order belongs to the logged-in user (so nobody can see someone else's orders). Useful if you later want an order detail page.
+
+- [x] <a id="p12-s12"></a>**Step 12 — Connect `/orders` to real data**
+
+  Open `src/routes/orders.tsx` and make these changes:
+
+  1) Add this import at the top (next to the other imports):
+
+  ```ts
+  import { Link, createFileRoute, redirect } from "@tanstack/react-router";
+  import { getOrdersByUser } from "@/data/orders";
+  ```
+
+  2) Replace the Route definition to this:
+
+  ```ts
+  export const Route = createFileRoute("/orders")({
+  	beforeLoad: async ({ context }) => {
+  		const session = context.session;
+  		if (!session) throw redirect({ to: "/sign-in" });
+  	},
+  	loader: async () => getOrdersByUser(),
+  	component: OrdersPage,
+  });
+  ```
+
+  3) Delete the entire `mockOrders` block.
+
+  4) Inside `OrdersPage`, replace the first line — change:
+
+  ```ts
+  const orders = mockOrders;
+  ```
+
+  to:
+
+  ```ts
+  const orders = Route.useLoaderData();
+  ```
+
+  Now the page fetches real orders from the database. The `beforeLoad` guard redirects to sign-in if the user is not logged in (same pattern as `create-product.tsx`). The loader calls `getOrdersByUser` which returns only orders belonging to the current user.
 
 ---
 

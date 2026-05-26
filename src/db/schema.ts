@@ -152,3 +152,38 @@ export const accountRelations = relations(account, ({ one }) => ({
 		references: [user.id],
 	}),
 }));
+
+// --- Phase 12: Orders ---
+
+const orderStatusValues = ["pending", "paid", "failed"] as const;
+export const orderStatusEnum = pgEnum("order_status", orderStatusValues);
+
+export const orders = pgTable("orders", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	stripeSessionId: text("stripe_session_id"),
+	status: orderStatusEnum("status").notNull().default("pending"),
+	total: numeric("total", { precision: 10, scale: 2 }).notNull(),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const orderItems = pgTable("order_items", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	orderId: uuid("order_id")
+		.notNull()
+		.references(() => orders.id, { onDelete: "cascade" }),
+	productId: uuid("product_id").references(() => products.id, {
+		onDelete: "set null",
+	}),
+	name: varchar("name", { length: 256 }).notNull(),
+	price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+	quantity: integer("quantity").notNull(),
+	image: varchar("image", { length: 512 }).notNull(),
+});
+
+export type OrderSelect = typeof orders.$inferSelect;
+export type OrderInsert = typeof orders.$inferInsert;
+export type OrderItemSelect = typeof orderItems.$inferSelect;
+export type OrderItemInsert = typeof orderItems.$inferInsert;

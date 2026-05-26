@@ -2,6 +2,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import {
 	clearCart,
 	fetchCartItems,
@@ -18,6 +19,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
+import { createCheckoutSession } from "@/data/checkout";
 
 // DB shape: Array<{ id: string; name: string; price: string; quantity: number; image: string; inventory: string }>
 // Mock — same shape as the DB response above, useful when copying to another project
@@ -57,6 +59,7 @@ function CartPage() {
 	const [clearing, setClearing] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
 	const [updatingId, setUpdatingId] = useState<string | null>(null);
+	const [checkingOut, setCheckingOut] = useState(false);
 
 	const subtotal = cart.reduce(
 		(acc, item) => acc + Number(item.price) * item.quantity,
@@ -260,8 +263,26 @@ function CartPage() {
 					</div>
 				</div>
 
-				<Button className="mt-5 w-full" type="button">
-					Checkout
+				<Button
+					className="mt-5 w-full"
+					type="button"
+					disabled={checkingOut}
+					onClick={async () => {
+						setCheckingOut(true);
+						try {
+							const { url } = await createCheckoutSession();
+							window.location.href = url;
+						} catch (error) {
+							toast.error(
+								error instanceof Error
+									? error.message
+									: "Failed to start checkout. Please try again.",
+							);
+							setCheckingOut(false);
+						}
+					}}
+				>
+					{checkingOut ? "Redirecting to Stripe..." : "Checkout"}
 				</Button>
 			</div>
 		</div>
