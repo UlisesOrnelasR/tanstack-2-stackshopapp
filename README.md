@@ -114,6 +114,11 @@
   - [Step 10 — Create /orders route (layout with mock data)](#p12-s10)
   - [Step 11 — Create src/data/orders.ts](#p12-s11)
   - [Step 12 — Connect /orders to real data](#p12-s12)
+- [🛠️ Phase 13 — Admin Orders Dashboard](#phase-13)
+  - [Step 1 — Header link, route & mock layout with detail Dialog](#p13-s1)
+  - [Step 2 — Create getAllOrders server function](#p13-s2)
+  - [Step 3 — Connect the route to real data](#p13-s3)
+  - [Step 4 — updateOrderStatus server function + connect in UI](#p13-s4)
 
 ---
 
@@ -4243,6 +4248,579 @@ How it works: When the user clicks "Checkout", the server creates a pending orde
   ```
 
   Now the page fetches real orders from the database. The `beforeLoad` guard redirects to sign-in if the user is not logged in (same pattern as `create-product.tsx`). The loader calls `getOrdersByUser` which returns only orders belonging to the current user.
+
+---
+
+<a id="phase-13"></a>
+
+### Phase 13 — Admin Orders Dashboard
+
+![phase13](./assets/phase_13_admin_orders_dashboard_v2.svg)
+
+- [x] <a id="p13-s1"></a>**Step 1 — Header link, route & mock layout with detail Dialog**
+
+  Three things happening here:
+
+  - **Header** — Add "Manage Orders" link inside the admin block, right after "Manage Products"
+  - **Route** — Create `src/routes/orders/manage-orders.tsx` with `beforeLoad` admin guard, TanStack Table with mock data, and an Eye button per row
+  - **Dialog** — Clicking the eye icon opens a Dialog showing customer info, status, total, and the list of items
+
+  ***
+
+  **1) Header — add the link**
+
+  Open `src/components/Header.tsx`. Inside the `session?.user.role === "admin"` block, add this right after the "Manage Products" link:
+
+  ```tsx
+  <Link
+  	to="/orders/manage-orders"
+  	onClick={() => setIsUserMenuOpen(false)}
+  	className="block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+  >
+  	Manage Orders
+  </Link>
+  ```
+
+  ***
+
+  **2) Create the route file**
+
+  Create `src/routes/orders/manage-orders.tsx`:
+
+  ```tsx
+  import { createFileRoute, redirect } from "@tanstack/react-router";
+  import {
+  	type ColumnDef,
+  	flexRender,
+  	getCoreRowModel,
+  	useReactTable,
+  } from "@tanstack/react-table";
+  import { Eye } from "lucide-react";
+  import { useState } from "react";
+  import { Button } from "@/components/ui/button";
+  import {
+  	Card,
+  	CardContent,
+  	CardDescription,
+  	CardHeader,
+  	CardTitle,
+  } from "@/components/ui/card";
+  import {
+  	Dialog,
+  	DialogContent,
+  	DialogDescription,
+  	DialogHeader,
+  	DialogTitle,
+  } from "@/components/ui/dialog";
+  import {
+  	Table,
+  	TableBody,
+  	TableCell,
+  	TableHead,
+  	TableHeader,
+  	TableRow,
+  } from "@/components/ui/table";
+
+  // ── Mock data — delete in Step 3 when we connect real data ──
+  const mockOrders = [
+  	{
+  		id: "ord-001",
+  		user: { name: "John Doe", email: "john@example.com" },
+  		status: "paid" as const,
+  		total: "249.98",
+  		createdAt: new Date("2026-05-20T14:30:00"),
+  		items: [
+  			{ id: "i1", name: "TanStack Router Pro", price: "99.99", quantity: 1, image: "/tanstack-circle-logo.png" },
+  			{ id: "i2", name: "TanStack Query Enterprise", price: "149.99", quantity: 1, image: "/tanstack-circle-logo.png" },
+  		],
+  	},
+  	{
+  		id: "ord-002",
+  		user: { name: "Jane Smith", email: "jane@example.com" },
+  		status: "pending" as const,
+  		total: "79.99",
+  		createdAt: new Date("2026-05-21T09:15:00"),
+  		items: [
+  			{ id: "i3", name: "TanStack Table Premium", price: "79.99", quantity: 1, image: "/tanstack-circle-logo.png" },
+  		],
+  	},
+  	{
+  		id: "ord-003",
+  		user: { name: "Carlos Rivera", email: "carlos@example.com" },
+  		status: "failed" as const,
+  		total: "199.99",
+  		createdAt: new Date("2026-05-19T18:45:00"),
+  		items: [
+  			{ id: "i4", name: "TanStack Start Framework", price: "199.99", quantity: 1, image: "/tanstack-circle-logo.png" },
+  		],
+  	},
+  ];
+
+  type MockOrder = (typeof mockOrders)[number];
+
+  const statusStyles = {
+  	pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  	paid: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  	failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  };
+
+  // ── Route ──
+  export const Route = createFileRoute("/orders/manage-orders")({
+  	beforeLoad: async ({ context }) => {
+  		const session = context.session;
+  		if (!session) throw redirect({ to: "/sign-in" });
+  		if (session.user.role !== "admin") throw redirect({ to: "/" });
+  		return { user: session.user };
+  	},
+  	component: ManageOrdersPage,
+  });
+
+  // ── Component ──
+  function ManageOrdersPage() {
+  	const orders = mockOrders; // ← becomes Route.useLoaderData() in Step 3
+
+  	const [viewingOrder, setViewingOrder] = useState<MockOrder | null>(null);
+
+  	const columns: ColumnDef<MockOrder>[] = [
+  		{
+  			accessorKey: "createdAt",
+  			header: "Date",
+  			cell: ({ row }) => (
+  				<span className="text-sm text-slate-600 dark:text-slate-300">
+  					{row.original.createdAt.toLocaleDateString("en-US", {
+  						year: "numeric",
+  						month: "short",
+  						day: "numeric",
+  					})}
+  				</span>
+  			),
+  		},
+  		{
+  			id: "customer",
+  			header: "Customer",
+  			cell: ({ row }) => (
+  				<div>
+  					<p className="text-sm font-medium">{row.original.user.name}</p>
+  					<p className="text-xs text-slate-500">{row.original.user.email}</p>
+  				</div>
+  			),
+  		},
+  		{
+  			accessorKey: "status",
+  			header: "Status",
+  			cell: ({ row }) => (
+  				<span
+  					className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[row.original.status]}`}
+  				>
+  					{row.original.status.charAt(0).toUpperCase() + row.original.status.slice(1)}
+  				</span>
+  			),
+  		},
+  		{
+  			id: "itemsCount",
+  			header: "Items",
+  			cell: ({ row }) => (
+  				<span className="text-sm">
+  					{row.original.items.reduce((sum, item) => sum + item.quantity, 0)}
+  				</span>
+  			),
+  		},
+  		{
+  			accessorKey: "total",
+  			header: "Total",
+  			cell: ({ row }) => (
+  				<span className="text-sm font-semibold">
+  					${Number(row.original.total).toFixed(2)}
+  				</span>
+  			),
+  		},
+  		{
+  			id: "actions",
+  			header: "",
+  			cell: ({ row }) => (
+  				<Button
+  					variant="outline"
+  					size="sm"
+  					onClick={() => setViewingOrder(row.original)}
+  				>
+  					<Eye size={14} />
+  				</Button>
+  			),
+  		},
+  	];
+
+  	// useReactTable wires up the data, columns, and the row model.
+  	// getCoreRowModel() is the minimum required model — it processes rows without sorting, filtering, or pagination.
+  	const table = useReactTable({
+  		data: orders,
+  		columns,
+  		getCoreRowModel: getCoreRowModel(),
+  	});
+
+  	return (
+  		<div className="mx-auto max-w-7xl py-8 px-4">
+  			<div className="space-y-6">
+  				<Card>
+  					<CardHeader>
+  						<CardTitle className="text-lg">Manage Orders</CardTitle>
+  						<CardDescription>
+  							View all customer orders and their details.
+  						</CardDescription>
+  					</CardHeader>
+  				</Card>
+
+  				<Card>
+  					<CardContent className="p-0">
+  						<Table>
+  							<TableHeader>
+  								{table.getHeaderGroups().map((headerGroup) => (
+  									<TableRow key={headerGroup.id}>
+  										{headerGroup.headers.map((header) => (
+  											<TableHead key={header.id}>
+  												{header.isPlaceholder
+  													? null
+  													: flexRender(
+  															header.column.columnDef.header,
+  															header.getContext(),
+  														)}
+  											</TableHead>
+  										))}
+  									</TableRow>
+  								))}
+  							</TableHeader>
+  							<TableBody>
+  								{table.getRowModel().rows.length ? (
+  									table.getRowModel().rows.map((row) => (
+  										<TableRow key={row.id}>
+  											{row.getVisibleCells().map((cell) => (
+  												<TableCell key={cell.id}>
+  													{flexRender(
+  														cell.column.columnDef.cell,
+  														cell.getContext(),
+  													)}
+  												</TableCell>
+  											))}
+  										</TableRow>
+  									))
+  								) : (
+  									<TableRow>
+  										<TableCell
+  											colSpan={columns.length}
+  											className="h-24 text-center text-slate-500"
+  										>
+  											No orders found.
+  										</TableCell>
+  									</TableRow>
+  								)}
+  							</TableBody>
+  						</Table>
+  					</CardContent>
+  				</Card>
+  			</div>
+
+  			{/* Order detail Dialog */}
+  			<Dialog
+  				open={viewingOrder !== null}
+  				onOpenChange={(open) => {
+  					if (!open) setViewingOrder(null);
+  				}}
+  			>
+  				<DialogContent className="max-w-lg">
+  					<DialogHeader>
+  						<DialogTitle>Order Details</DialogTitle>
+  						<DialogDescription>
+  							Order placed on{" "}
+  							{viewingOrder?.createdAt.toLocaleDateString("en-US", {
+  								year: "numeric",
+  								month: "long",
+  								day: "numeric",
+  							})}
+  						</DialogDescription>
+  					</DialogHeader>
+
+  					{viewingOrder && (
+  						<div className="space-y-4">
+  							<div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+  								<p className="text-sm font-medium">{viewingOrder.user.name}</p>
+  								<p className="text-xs text-slate-500">{viewingOrder.user.email}</p>
+  							</div>
+
+  							<div className="flex items-center justify-between">
+  								<span
+  									className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[viewingOrder.status]}`}
+  								>
+  									{viewingOrder.status.charAt(0).toUpperCase() + viewingOrder.status.slice(1)}
+  								</span>
+  								<span className="text-lg font-bold">
+  									${Number(viewingOrder.total).toFixed(2)}
+  								</span>
+  							</div>
+
+  							<div className="divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+  								{viewingOrder.items.map((item) => (
+  									<div key={item.id} className="flex items-center gap-3 p-3">
+  										<div className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+  											<img src={item.image} alt={item.name} className="h-6 w-6 object-contain" />
+  										</div>
+  										<div className="flex-1">
+  											<p className="text-sm font-medium">{item.name}</p>
+  											<p className="text-xs text-slate-500">
+  												Qty: {item.quantity} · ${Number(item.price).toFixed(2)} each
+  											</p>
+  										</div>
+  										<span className="text-sm font-semibold">
+  											${(Number(item.price) * item.quantity).toFixed(2)}
+  										</span>
+  									</div>
+  								))}
+  							</div>
+  						</div>
+  					)}
+  				</DialogContent>
+  			</Dialog>
+  		</div>
+  	);
+  }
+  ```
+
+  **How TanStack Table renders the grid**
+
+  The pattern is always the same three steps: (1) define `columns` with `ColumnDef[]`, (2) call `useReactTable` to get a `table` instance, (3) map `table.getHeaderGroups()` for the header and `table.getRowModel().rows` for the body.
+
+  Each column definition has an `id` or `accessorKey`. `accessorKey` maps directly to a property on the row data; `id` is for computed or action columns that don't map to a single field. The `cell` render prop receives `{ row }` — `row.original` is the typed raw object, so you can access any property without casting.
+
+  `flexRender` is TanStack Table's utility that calls the column's `header` or `cell` function with the correct context — it handles both function and static string definitions transparently.
+
+- [x] <a id="p13-s2"></a>**Step 2 — Create `getAllOrders` server function**
+
+  This function fetches all orders from all users (not just the logged-in user like `getOrdersByUser` does). It joins `orders` with `user` to get the buyer's name and email, then fetches the items for each order. Only admins can call it.
+
+  Open `src/data/orders.ts` and add this function at the bottom:
+
+  ```ts
+  // Fetch ALL orders (admin only) — joins with user table to get buyer info
+  export const getAllOrders = createServerFn({ method: "GET" }).handler(
+  	async () => {
+  		const session = await getSession();
+  		if (!session) throw new Error("Unauthorized");
+  		if (session.user.role !== "admin") throw new Error("Forbidden");
+
+  		const { db } = await import("@/db");
+  		const { user } = await import("@/db/schema");
+
+  		// Get all orders joined with user info, newest first
+  		const rows = await db
+  			.select({
+  				id: orders.id,
+  				status: orders.status,
+  				total: orders.total,
+  				createdAt: orders.createdAt,
+  				userName: user.name,
+  				userEmail: user.email,
+  			})
+  			.from(orders)
+  			.innerJoin(user, eq(orders.userId, user.id))
+  			.orderBy(desc(orders.createdAt));
+
+  		if (rows.length === 0) return [];
+
+  		// For each order, fetch its items
+  		const ordersWithItems = await Promise.all(
+  			rows.map(async (row) => {
+  				const items = await db
+  					.select()
+  					.from(orderItems)
+  					.where(eq(orderItems.orderId, row.id));
+
+  				return {
+  					id: row.id,
+  					user: { name: row.userName, email: row.userEmail },
+  					status: row.status,
+  					total: row.total,
+  					createdAt: row.createdAt,
+  					items: items.map((item) => ({
+  						id: item.id,
+  						name: item.name,
+  						price: item.price,
+  						quantity: item.quantity,
+  						image: item.image,
+  					})),
+  				};
+  			}),
+  		);
+
+  		return ordersWithItems;
+  	},
+  );
+  ```
+
+  Notice the return shape matches exactly the mock data we used in Step 1 — `user: { name, email }`, `status`, `total`, `createdAt`, and `items[]`. This means swapping from mock to real data will be seamless.
+
+  **Why the `select` projection matters**
+
+  Unlike `getOrdersByUser` which does `db.select().from(orders)` and gets every column, `getAllOrders` uses an explicit projection: `db.select({ id: orders.id, userName: user.name, ... })`. This is necessary because the join produces a row that would otherwise contain both `orders.*` and `user.*` — including fields like `user.password` and `user.emailVerified` that we never want to expose. Projecting only the needed columns keeps the response lean and safe.
+
+- [x] <a id="p13-s3"></a>**Step 3 — Connect the route to real data**
+
+  Open `src/routes/orders/manage-orders.tsx` and make these changes:
+
+  1) Add the import at the top:
+
+  ```ts
+  import { getAllOrders } from "@/data/orders";
+  ```
+
+  2) Add a `loader` to the Route definition:
+
+  ```ts
+  export const Route = createFileRoute("/orders/manage-orders")({
+  	beforeLoad: async ({ context }) => {
+  		const session = context.session;
+  		if (!session) throw redirect({ to: "/sign-in" });
+  		if (session.user.role !== "admin") throw redirect({ to: "/" });
+  		return { user: session.user };
+  	},
+  	loader: async () => getAllOrders(),
+  	component: ManageOrdersPage,
+  });
+  ```
+
+  3) Delete the entire `mockOrders` array and the `MockOrder` type.
+
+  4) Inside `ManageOrdersPage`, replace:
+
+  ```ts
+  const orders = mockOrders;
+  ```
+
+  with:
+
+  ```ts
+  const orders = Route.useLoaderData();
+  ```
+
+  5) Update the type for `viewingOrder` and `columns`. Replace:
+
+  ```ts
+  const [viewingOrder, setViewingOrder] = useState<MockOrder | null>(null);
+
+  const columns: ColumnDef<MockOrder>[] = [
+  ```
+
+  with:
+
+  ```ts
+  type OrderData = (typeof orders)[number];
+
+  const [viewingOrder, setViewingOrder] = useState<OrderData | null>(null);
+
+  const columns: ColumnDef<OrderData>[] = [
+  ```
+
+  That's it — 5 small changes. The component stays exactly the same because `getAllOrders` returns the same shape as the mock data.
+
+- [x] <a id="p13-s4"></a>**Step 4 — `updateOrderStatus` server function + connect in UI**
+
+  Two things: create the server function, then add a `Select` in the Dialog so the admin can change the status.
+
+  ***
+
+  **1) Add `updateOrderStatus` in `src/data/orders.ts`**
+
+  ```ts
+  export const updateOrderStatus = createServerFn({ method: "POST" })
+  	.inputValidator(
+  		(data: { orderId: string; status: "pending" | "paid" | "failed" }) => data,
+  	)
+  	.handler(async ({ data }) => {
+  		const session = await getSession();
+  		if (!session) throw new Error("Unauthorized");
+  		if (session.user.role !== "admin") throw new Error("Forbidden");
+
+  		const { db } = await import("@/db");
+
+  		await db
+  			.update(orders)
+  			.set({ status: data.status })
+  			.where(eq(orders.id, data.orderId));
+  	});
+  ```
+
+  Receives the order ID and the new status. Checks admin role first, then updates the `status` column in the database.
+
+  ***
+
+  **2) Update `manage-orders.tsx`**
+
+  Add these new imports at the top (keep the ones you already have):
+
+  ```ts
+  import { toast } from "sonner";
+  import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+  import { getAllOrders, updateOrderStatus } from "@/data/orders";
+  import {
+  	Select,
+  	SelectContent,
+  	SelectItem,
+  	SelectTrigger,
+  	SelectValue,
+  } from "@/components/ui/select";
+  ```
+
+  Inside `ManageOrdersPage`, add these two lines after the existing state:
+
+  ```ts
+  const router = useRouter();
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  ```
+
+  In the Dialog, find the status + total section (the `div` with `flex items-center justify-between`). Replace it with:
+
+  ```tsx
+  <div className="flex items-center justify-between">
+  	<Select
+  		value={viewingOrder.status}
+  		disabled={updatingId === viewingOrder.id}
+  		onValueChange={async (value) => {
+  			setUpdatingId(viewingOrder.id);
+  			try {
+  				await updateOrderStatus({
+  					data: {
+  						orderId: viewingOrder.id,
+  						status: value as "pending" | "paid" | "failed",
+  					},
+  				});
+  				toast.success("Order status updated");
+  				router.invalidate();
+  				setViewingOrder(null);
+  			} catch {
+  				toast.error("Failed to update status");
+  			}
+  			setUpdatingId(null);
+  		}}
+  	>
+  		<SelectTrigger className="w-[120px] h-8 text-xs">
+  			<SelectValue />
+  		</SelectTrigger>
+  		<SelectContent>
+  			<SelectItem value="pending">
+  				<span className="text-yellow-600">Pending</span>
+  			</SelectItem>
+  			<SelectItem value="paid">
+  				<span className="text-green-600">Paid</span>
+  			</SelectItem>
+  			<SelectItem value="failed">
+  				<span className="text-red-600">Failed</span>
+  			</SelectItem>
+  		</SelectContent>
+  	</Select>
+  	<span className="text-lg font-bold">
+  		${Number(viewingOrder.total).toFixed(2)}
+  	</span>
+  </div>
+  ```
+
+  After `updateOrderStatus` succeeds, `router.invalidate()` re-runs the loader so the table reflects the new status immediately — same pattern used in Phase 6 after creating a product. `setViewingOrder(null)` closes the Dialog.
 
 ---
 

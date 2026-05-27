@@ -96,3 +96,75 @@ export const getOrderById = createServerFn({ method: "GET" })
 			})),
 		};
 	});
+
+// Fetch ALL orders (admin only) — joins with user table to get buyer info
+export const getAllOrders = createServerFn({ method: "GET" }).handler(
+	async () => {
+		const session = await getSession();
+		if (!session) throw new Error("Unauthorized");
+		if (session.user.role !== "admin") throw new Error("Forbidden");
+
+		const { db } = await import("@/db");
+		const { user } = await import("@/db/schema");
+
+		// Get all orders joined with user info, newest first
+		const rows = await db
+			.select({
+				id: orders.id,
+				status: orders.status,
+				total: orders.total,
+				createdAt: orders.createdAt,
+				userName: user.name,
+				userEmail: user.email,
+			})
+			.from(orders)
+			.innerJoin(user, eq(orders.userId, user.id))
+			.orderBy(desc(orders.createdAt));
+
+		if (rows.length === 0) return [];
+
+		// For each order, fetch its items
+		const ordersWithItems = await Promise.all(
+			rows.map(async (row) => {
+				const items = await db
+					.select()
+					.from(orderItems)
+					.where(eq(orderItems.orderId, row.id));
+
+				return {
+					id: row.id,
+					user: { name: row.userName, email: row.userEmail },
+					status: row.status,
+					total: row.total,
+					createdAt: row.createdAt,
+					items: items.map((item) => ({
+						id: item.id,
+						name: item.name,
+						price: item.price,
+						quantity: item.quantity,
+						image: item.image,
+					})),
+				};
+			}),
+		);
+
+		return ordersWithItems;
+	},
+);
+
+export const updateOrderStatus = createServerFn({ method: "POST" })
+	.inputValidator(
+		(data: { orderId: string; status: "pending" | "paid" | "failed" }) => data,
+	)
+	.handler(async ({ data }) => {
+		const session = await getSession();
+		if (!session) throw new Error("Unauthorized");
+		if (session.user.role !== "admin") throw new Error("Forbidden");
+
+		const { db } = await import("@/db");
+
+		await db
+			.update(orders)
+			.set({ status: data.status })
+			.where(eq(orders.id, data.orderId));
+	});

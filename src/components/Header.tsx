@@ -142,6 +142,13 @@ export default function Header() {
 											>
 												Manage Products
 											</Link>
+											<Link
+												to="/orders/manage-orders"
+												onClick={() => setIsUserMenuOpen(false)}
+												className="block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+											>
+												Manage Orders
+											</Link>
 										</>
 									)}
 									<button

@@ -19,6 +19,7 @@ import { Route as OrdersIndexRouteImport } from './routes/orders/index'
 import { Route as ProductsManageProductsRouteImport } from './routes/products/manage-products'
 import { Route as ProductsCreateProductRouteImport } from './routes/products/create-product'
 import { Route as ProductsIdRouteImport } from './routes/products/$id'
+import { Route as OrdersManageOrdersRouteImport } from './routes/orders/manage-orders'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout/success'
 import { Route as CheckoutCancelRouteImport } from './routes/checkout/cancel'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -73,6 +74,11 @@ const ProductsIdRoute = ProductsIdRouteImport.update({
   path: '/products/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrdersManageOrdersRoute = OrdersManageOrdersRouteImport.update({
+  id: '/orders/manage-orders',
+  path: '/orders/manage-orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
   id: '/checkout/success',
   path: '/checkout/success',
@@ -97,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof SignUpRoute
   '/checkout/cancel': typeof CheckoutCancelRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/orders/manage-orders': typeof OrdersManageOrdersRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
   '/products/manage-products': typeof ProductsManageProductsRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/sign-up': typeof SignUpRoute
   '/checkout/cancel': typeof CheckoutCancelRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/orders/manage-orders': typeof OrdersManageOrdersRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
   '/products/manage-products': typeof ProductsManageProductsRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/sign-up': typeof SignUpRoute
   '/checkout/cancel': typeof CheckoutCancelRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/orders/manage-orders': typeof OrdersManageOrdersRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
   '/products/manage-products': typeof ProductsManageProductsRoute
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/checkout/cancel'
     | '/checkout/success'
+    | '/orders/manage-orders'
     | '/products/$id'
     | '/products/create-product'
     | '/products/manage-products'
@@ -160,6 +170,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/checkout/cancel'
     | '/checkout/success'
+    | '/orders/manage-orders'
     | '/products/$id'
     | '/products/create-product'
     | '/products/manage-products'
@@ -175,6 +186,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/checkout/cancel'
     | '/checkout/success'
+    | '/orders/manage-orders'
     | '/products/$id'
     | '/products/create-product'
     | '/products/manage-products'
@@ -191,6 +203,7 @@ export interface RootRouteChildren {
   SignUpRoute: typeof SignUpRoute
   CheckoutCancelRoute: typeof CheckoutCancelRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
+  OrdersManageOrdersRoute: typeof OrdersManageOrdersRoute
   ProductsIdRoute: typeof ProductsIdRoute
   ProductsCreateProductRoute: typeof ProductsCreateProductRoute
   ProductsManageProductsRoute: typeof ProductsManageProductsRoute
@@ -271,6 +284,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/orders/manage-orders': {
+      id: '/orders/manage-orders'
+      path: '/orders/manage-orders'
+      fullPath: '/orders/manage-orders'
+      preLoaderRoute: typeof OrdersManageOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/checkout/success': {
       id: '/checkout/success'
       path: '/checkout/success'
@@ -303,6 +323,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignUpRoute: SignUpRoute,
   CheckoutCancelRoute: CheckoutCancelRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
+  OrdersManageOrdersRoute: OrdersManageOrdersRoute,
   ProductsIdRoute: ProductsIdRoute,
   ProductsCreateProductRoute: ProductsCreateProductRoute,
   ProductsManageProductsRoute: ProductsManageProductsRoute,
