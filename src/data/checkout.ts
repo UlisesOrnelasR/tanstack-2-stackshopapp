@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { cartItems, orderItems, orders, products } from "#/db/schema";
 import { getSession } from "#/lib/auth.functions";
+import { sendOrderConfirmationEmail } from "@/lib/email";
 
 export const createCheckoutSession = createServerFn({ method: "POST" }).handler(
 	async () => {
@@ -142,6 +143,32 @@ export const confirmOrder = createServerFn({ method: "POST" })
 
 			// 4. Clear the cart
 			await db.delete(cartItems);
+
+			// 5. Send confirmation email (fire-and-forget)
+			const items = await db
+				.select()
+				.from(orderItems)
+				.where(eq(orderItems.orderId, order.id));
+
+			sendOrderConfirmationEmail(
+				{
+					name: "TanStack Store",
+					from: "TanStack Store <onboarding@resend.dev>",
+					ordersUrl: `${process.env.BETTER_AUTH_URL}/orders`,
+				},
+				{
+					to: session.user.email,
+					customerName: session.user.name,
+					orderId: order.id,
+					total: order.total,
+					items: items.map((item) => ({
+						name: item.name,
+						price: item.price,
+						quantity: item.quantity,
+						image: item.image,
+					})),
+				},
+			);
 		}
 
 		return { orderId: order.id, status: "paid" as const };

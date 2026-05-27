@@ -119,6 +119,11 @@
   - [Step 2 — Create getAllOrders server function](#p13-s2)
   - [Step 3 — Connect the route to real data](#p13-s3)
   - [Step 4 — updateOrderStatus server function + connect in UI](#p13-s4)
+- [📧 Phase 14 — Order Confirmation Email with Resend](#phase-14)
+  - [Step 1 — Create an API key in Resend](#p14-s1)
+  - [Step 2 — Install Resend](#p14-s2)
+  - [Step 3 — Create src/lib/email.ts](#p14-s3)
+  - [Step 4 — Wire into confirmOrder](#p14-s4)
 
 ---
 
@@ -257,6 +262,8 @@ SUPABASE_URL=https://fceond?????????.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 STRIPE_SECRET_KEY=
+
+RESEND_API_KEY=re_your_full_key_here
 ```
 
 | Variable | Required | Purpose |
@@ -267,6 +274,7 @@ STRIPE_SECRET_KEY=
 | `SUPABASE_URL` | ✅ | Supabase project URL — used by the storage client |
 | `SUPABASE_ANON_KEY` | ✅ | Public anon key for Supabase Storage operations |
 | `STRIPE_SECRET_KEY` | ✅ | Stripe secret key for Checkout session creation |
+| `RESEND_API_KEY` | ✅ | Resend API key for sending order confirmation emails |
 
 ---
 
@@ -4821,6 +4829,232 @@ How it works: When the user clicks "Checkout", the server creates a pending orde
   ```
 
   After `updateOrderStatus` succeeds, `router.invalidate()` re-runs the loader so the table reflects the new status immediately — same pattern used in Phase 6 after creating a product. `setViewingOrder(null)` closes the Dialog.
+
+---
+
+<a id="phase-14"></a>
+
+### Phase 14 — Order Confirmation Email with Resend
+
+![phase14](./assets/phase_14_resend_email_flow.svg)
+
+When `confirmOrder` verifies the payment with Stripe and updates the order to "paid", it also fires a confirmation email to the buyer using Resend. The email includes a summary with the products, quantities, prices, and total. The email module is fully generic — reusable across any store.
+
+- [x] <a id="p14-s1"></a>**Step 1 — Create an API key in Resend** 🔑
+
+  In your Resend dashboard, click **+ Create API Key**:
+  - Name it `ecommerce` (or whatever you prefer)
+  - Permission: **Full access**
+  - Click **Create** and copy the token immediately (it's only shown once)
+
+  Open your `.env` and add at the bottom:
+
+  ```env
+  RESEND_API_KEY=re_your_full_key_here
+  ```
+
+- [x] <a id="p14-s2"></a>**Step 2 — Install Resend** 📦
+
+  ```bash
+  npm install resend
+  ```
+
+  Resend's SDK is minimal — one function `resend.emails.send()` with full TypeScript support.
+
+- [x] <a id="p14-s3"></a>**Step 3 — Create `src/lib/email.ts`** 📧
+
+  This module is completely generic. Nothing is hardcoded to any specific store — it receives the store config as a parameter, so you can copy it to any project and just change the values when calling it:
+
+  ```ts
+  import { Resend } from "resend";
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  // ─── Generic types ───────────────────────────────────────
+
+  type OrderItem = {
+    name: string;
+    price: string;
+    quantity: number;
+    image: string;
+  };
+
+  type StoreConfig = {
+    name: string;
+    from: string;
+    ordersUrl: string;
+    colors?: {
+      primary?: string;
+      background?: string;
+      text?: string;
+      muted?: string;
+      border?: string;
+    };
+  };
+
+  type OrderEmailData = {
+    to: string;
+    customerName: string;
+    orderId: string;
+    total: string;
+    items: OrderItem[];
+  };
+
+  // ─── Email builder ───────────────────────────────────────
+
+  export async function sendOrderConfirmationEmail(
+    store: StoreConfig,
+    order: OrderEmailData,
+  ) {
+    const c = {
+      primary: store.colors?.primary ?? "#0f172a",
+      background: store.colors?.background ?? "#f8fafc",
+      text: store.colors?.text ?? "#0f172a",
+      muted: store.colors?.muted ?? "#64748b",
+      border: store.colors?.border ?? "#e2e8f0",
+    };
+
+    const itemRows = order.items
+      .map(
+        (item) =>
+          `<tr>
+            <td style="padding:12px 8px;border-bottom:1px solid ${c.border};">
+              <img src="${item.image}" alt="${item.name}" width="48" height="48" style="border-radius:8px;object-fit:cover;" />
+            </td>
+            <td style="padding:12px 8px;border-bottom:1px solid ${c.border};font-size:14px;color:${c.text};">
+              ${item.name}
+            </td>
+            <td style="padding:12px 8px;border-bottom:1px solid ${c.border};font-size:14px;text-align:center;color:${c.text};">
+              ${item.quantity}
+            </td>
+            <td style="padding:12px 8px;border-bottom:1px solid ${c.border};font-size:14px;text-align:right;color:${c.text};">
+              $${(Number(item.price) * item.quantity).toFixed(2)}
+            </td>
+          </tr>`,
+      )
+      .join("");
+
+    const html = `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+        <div style="text-align:center;padding:24px 0;border-bottom:2px solid ${c.border};">
+          <h1 style="margin:0;font-size:24px;color:${c.text};">Order Confirmed! ✓</h1>
+          <p style="margin:8px 0 0;font-size:13px;color:${c.muted};">${store.name}</p>
+        </div>
+
+        <div style="padding:24px 0;">
+          <p style="font-size:16px;color:${c.text};">Hi ${order.customerName},</p>
+          <p style="font-size:14px;color:${c.muted};">
+            Thank you for your purchase. Here's a summary of your order.
+          </p>
+        </div>
+
+        <div style="background:${c.background};border-radius:12px;padding:16px;margin-bottom:24px;">
+          <p style="margin:0 0 4px;font-size:12px;color:${c.muted};text-transform:uppercase;letter-spacing:0.05em;">Order ID</p>
+          <p style="margin:0;font-size:14px;color:${c.text};font-family:monospace;">${order.orderId}</p>
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid ${c.border};">
+              <th style="padding:8px;text-align:left;font-size:12px;color:${c.muted};text-transform:uppercase;"></th>
+              <th style="padding:8px;text-align:left;font-size:12px;color:${c.muted};text-transform:uppercase;">Product</th>
+              <th style="padding:8px;text-align:center;font-size:12px;color:${c.muted};text-transform:uppercase;">Qty</th>
+              <th style="padding:8px;text-align:right;font-size:12px;color:${c.muted};text-transform:uppercase;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemRows}
+          </tbody>
+        </table>
+
+        <div style="text-align:right;padding:16px 8px;border-top:2px solid ${c.text};margin-top:8px;">
+          <span style="font-size:16px;font-weight:700;color:${c.text};">Total: $${Number(order.total).toFixed(2)}</span>
+        </div>
+
+        <div style="text-align:center;padding:32px 0 16px;">
+          <a href="${store.ordersUrl}" style="display:inline-block;background:${c.primary};color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">
+            View My Orders
+          </a>
+        </div>
+
+        <div style="text-align:center;padding:16px 0;border-top:1px solid ${c.border};">
+          <p style="font-size:12px;color:${c.muted};margin:0;">
+            This email was sent by ${store.name}.
+          </p>
+        </div>
+      </div>
+    `;
+
+    const { error } = await resend.emails.send({
+      from: store.from,
+      to: order.to,
+      subject: `Order Confirmed — ${order.orderId.slice(0, 8)}`,
+      html,
+    });
+
+    if (error) {
+      console.error(`[${store.name}] Failed to send confirmation email:`, error);
+    }
+  }
+  ```
+
+  `StoreConfig` is everything that changes between stores — name, sender address, orders URL, brand colors. `OrderEmailData` is always the same shape. When you build another store tomorrow, you just pass different config values.
+
+  The `colors` object is optional — if you don't pass it, the email defaults to a clean slate/dark palette. Email clients (Gmail, Outlook, Apple Mail) don't support external CSS or classes, so everything must be inline `style=""` — ugly to write, but the only reliable way.
+
+- [x] <a id="p14-s4"></a>**Step 4 — Wire into `confirmOrder` (`src/data/checkout.ts`)** ⚡
+
+  Two changes:
+
+  **1) Add the import at the top of the file** (next to the other imports):
+
+  ```ts
+  import { sendOrderConfirmationEmail } from "@/lib/email";
+  ```
+
+  **2) Inside `confirmOrder`**, add the email block right after `await db.delete(cartItems)` and before the closing `}` of the `if (order.status === "pending")` block:
+
+  ```ts
+  // 5. Send confirmation email (fire-and-forget)
+        const items = await db
+          .select()
+          .from(orderItems)
+          .where(eq(orderItems.orderId, order.id));
+
+        sendOrderConfirmationEmail(
+          {
+            name: "TanStack Store",
+            from: "TanStack Store <onboarding@resend.dev>",
+            ordersUrl: `${process.env.BETTER_AUTH_URL}/orders`,
+          },
+          {
+            to: session.user.email,
+            customerName: session.user.name,
+            orderId: order.id,
+            total: order.total,
+            items: items.map((item) => ({
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity,
+              image: item.image,
+            })),
+          },
+        );
+  ```
+
+  `sendOrderConfirmationEmail(...)` is called **without `await`** — intentional. The payment is already processed, the DB is updated, the cart is cleared. The email fires in the background (fire-and-forget). If it fails, `console.error` logs it but doesn't break the user's experience.
+
+  When you verify your own domain in Resend, just change the `from` to something like `"TanStack Store <orders@yourdomain.com>"`.
+
+  ***
+
+  > **Important — Resend free plan limitation:** Without a verified domain, Resend only allows sending emails to the address you signed up with (your Resend account owner email). If your app user has a different email, the send will fail with a `403 validation_error`.
+  >
+  > To remove this limitation and send to any email, verify your own domain in the Resend dashboard → **Domains** → **Add Domain** → follow the DNS setup. Once verified, update the `from` field in `checkout.ts` to use your domain:
+  >
+  > ```ts
+  > from: "TanStack Store <orders@yourdomain.com>",
+  > ```
 
 ---
 
