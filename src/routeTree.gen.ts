@@ -12,10 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as ProfileRouteImport } from './routes/profile'
-import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
+import { Route as OrdersIndexRouteImport } from './routes/orders/index'
 import { Route as ProductsManageProductsRouteImport } from './routes/products/manage-products'
 import { Route as ProductsCreateProductRouteImport } from './routes/products/create-product'
 import { Route as ProductsIdRouteImport } from './routes/products/$id'
@@ -38,11 +38,6 @@ const ProfileRoute = ProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrdersRoute = OrdersRouteImport.update({
-  id: '/orders',
-  path: '/orders',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const CartRoute = CartRouteImport.update({
   id: '/cart',
   path: '/cart',
@@ -56,6 +51,11 @@ const IndexRoute = IndexRouteImport.update({
 const ProductsIndexRoute = ProductsIndexRouteImport.update({
   id: '/products/',
   path: '/products/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrdersIndexRoute = OrdersIndexRouteImport.update({
+  id: '/orders/',
+  path: '/orders/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProductsManageProductsRoute = ProductsManageProductsRouteImport.update({
@@ -92,7 +92,6 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cart': typeof CartRoute
-  '/orders': typeof OrdersRoute
   '/profile': typeof ProfileRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
@@ -101,13 +100,13 @@ export interface FileRoutesByFullPath {
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
   '/products/manage-products': typeof ProductsManageProductsRoute
+  '/orders/': typeof OrdersIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cart': typeof CartRoute
-  '/orders': typeof OrdersRoute
   '/profile': typeof ProfileRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
@@ -116,6 +115,7 @@ export interface FileRoutesByTo {
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
   '/products/manage-products': typeof ProductsManageProductsRoute
+  '/orders': typeof OrdersIndexRoute
   '/products': typeof ProductsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -123,7 +123,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/cart': typeof CartRoute
-  '/orders': typeof OrdersRoute
   '/profile': typeof ProfileRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
@@ -132,6 +131,7 @@ export interface FileRoutesById {
   '/products/$id': typeof ProductsIdRoute
   '/products/create-product': typeof ProductsCreateProductRoute
   '/products/manage-products': typeof ProductsManageProductsRoute
+  '/orders/': typeof OrdersIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -140,7 +140,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/cart'
-    | '/orders'
     | '/profile'
     | '/sign-in'
     | '/sign-up'
@@ -149,13 +148,13 @@ export interface FileRouteTypes {
     | '/products/$id'
     | '/products/create-product'
     | '/products/manage-products'
+    | '/orders/'
     | '/products/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/cart'
-    | '/orders'
     | '/profile'
     | '/sign-in'
     | '/sign-up'
@@ -164,13 +163,13 @@ export interface FileRouteTypes {
     | '/products/$id'
     | '/products/create-product'
     | '/products/manage-products'
+    | '/orders'
     | '/products'
     | '/api/auth/$'
   id:
     | '__root__'
     | '/'
     | '/cart'
-    | '/orders'
     | '/profile'
     | '/sign-in'
     | '/sign-up'
@@ -179,6 +178,7 @@ export interface FileRouteTypes {
     | '/products/$id'
     | '/products/create-product'
     | '/products/manage-products'
+    | '/orders/'
     | '/products/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -186,7 +186,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CartRoute: typeof CartRoute
-  OrdersRoute: typeof OrdersRoute
   ProfileRoute: typeof ProfileRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
@@ -195,6 +194,7 @@ export interface RootRouteChildren {
   ProductsIdRoute: typeof ProductsIdRoute
   ProductsCreateProductRoute: typeof ProductsCreateProductRoute
   ProductsManageProductsRoute: typeof ProductsManageProductsRoute
+  OrdersIndexRoute: typeof OrdersIndexRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -222,13 +222,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/orders': {
-      id: '/orders'
-      path: '/orders'
-      fullPath: '/orders'
-      preLoaderRoute: typeof OrdersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/cart': {
       id: '/cart'
       path: '/cart'
@@ -248,6 +241,13 @@ declare module '@tanstack/react-router' {
       path: '/products'
       fullPath: '/products/'
       preLoaderRoute: typeof ProductsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/orders/': {
+      id: '/orders/'
+      path: '/orders'
+      fullPath: '/orders/'
+      preLoaderRoute: typeof OrdersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/products/manage-products': {
@@ -298,7 +298,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CartRoute: CartRoute,
-  OrdersRoute: OrdersRoute,
   ProfileRoute: ProfileRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
@@ -307,6 +306,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductsIdRoute: ProductsIdRoute,
   ProductsCreateProductRoute: ProductsCreateProductRoute,
   ProductsManageProductsRoute: ProductsManageProductsRoute,
+  OrdersIndexRoute: OrdersIndexRoute,
   ProductsIndexRoute: ProductsIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

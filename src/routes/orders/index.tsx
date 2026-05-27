@@ -10,13 +10,13 @@ import {
 } from "@/components/ui/empty";
 import { getOrdersByUser } from "@/data/orders";
 
-export const Route = createFileRoute("/orders")({
+export const Route = createFileRoute("/orders/")({
 	beforeLoad: async ({ context }) => {
 		const session = context.session;
 		if (!session) throw redirect({ to: "/sign-in" });
 	},
 	loader: async () => getOrdersByUser(),
-	component: OrdersPage,
+	component: RouteComponent,
 });
 
 const statusStyles = {
@@ -26,7 +26,7 @@ const statusStyles = {
 	failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
 };
 
-function OrdersPage() {
+function RouteComponent() {
 	const orders = Route.useLoaderData();
 
 	if (orders.length === 0) {

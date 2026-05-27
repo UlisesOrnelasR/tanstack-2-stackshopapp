@@ -3928,7 +3928,7 @@ How it works: When the user clicks "Checkout", the server creates a pending orde
 
 - [x] <a id="p12-s10"></a>**Step 10 — Create `/orders` route (layout with mock data)**
 
-  Create the file `src/routes/orders.tsx`:
+  Create the file `src/routes/orders/index.tsx`:
 
   ```tsx
   import { createFileRoute, Link } from "@tanstack/react-router";
@@ -4206,7 +4206,7 @@ How it works: When the user clicks "Checkout", the server creates a pending orde
 
 - [x] <a id="p12-s12"></a>**Step 12 — Connect `/orders` to real data**
 
-  Open `src/routes/orders.tsx` and make these changes:
+  Open `src/routes/orders/index.tsx` and make these changes:
 
   1) Add this import at the top (next to the other imports):
 
