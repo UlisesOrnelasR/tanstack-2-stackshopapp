@@ -4799,7 +4799,7 @@ How it works: When the user clicks "Checkout", the server creates a pending orde
   			setUpdatingId(null);
   		}}
   	>
-  		<SelectTrigger className="w-[120px] h-8 text-xs">
+  		<SelectTrigger className="w-30 h-8 text-xs">
   			<SelectValue />
   		</SelectTrigger>
   		<SelectContent>
