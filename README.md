@@ -474,13 +474,15 @@ This is a living document. Each step gets checked off as it's done.
 
 - [x] <a id="p2-s4"></a>**Step 4 — Route Middleware** 🔍
 
+  > **⚠️ This step is a demonstration only.** The middleware pattern shown here is useful for understanding how `createMiddleware` works in TanStack Start, but **you can skip implementing it** in your own project. For route protection and authorization, we will use `beforeLoad` + protected server functions — covered in Phase 8. Middleware is included here purely as a learning reference.
+
   Added server-side middleware to the `/products` route using `createMiddleware` from `@tanstack/react-start`.
 
   **What is middleware here?**
 
   In TanStack Start, middleware runs on the server **before** the route handler executes. It intercepts the request, can inspect or modify it, and must call `next()` to pass control forward — same mental model as Express or Hono middleware.
 
-  ```ts
+```ts
   // src/routes/products/index.tsx
 
   const loggerMiddleware = createMiddleware().server(
@@ -494,13 +496,13 @@ This is a living document. Each step gets checked off as it's done.
       return next(); // REQUIRED — without this the route never loads
     },
   );
-  ```
+```
 
   **How it's wired to the route:**
 
   The `server` config key on `createFileRoute` accepts a `middleware` array. Every entry runs in order before any loader or handler on that route:
 
-  ```ts
+```ts
   export const Route = createFileRoute("/products/")({
     loader: async () => fetchProducts(),
     component: RouteComponent,
@@ -515,13 +517,46 @@ This is a living document. Each step gets checked off as it's done.
       },
     },
   });
-  ```
+```
 
   | Key          | What it does                                                               |
   | ------------ | -------------------------------------------------------------------------- |
   | `middleware` | Array of middleware that intercept every request to this route             |
   | `handlers`   | Custom HTTP method handlers (`POST`, `PUT`, etc.) beyond the default `GET` |
   | `next()`     | Passes control to the next middleware or to the route itself — mandatory   |
+
+  **Middleware vs `beforeLoad` — which one to use?**
+
+  This project uses `beforeLoad` (not middleware) for route protection. Here's why they're different tools:
+
+  |                               | `middleware`                              | `beforeLoad`                                  |
+  | ----------------------------- | ----------------------------------------- | --------------------------------------------- |
+  | **Where it runs**             | Server only                               | Server + client                               |
+  | **When it executes**          | Before loader and HTTP handlers           | Before loader, on every navigation            |
+  | **Access to route context**   | ❌ No — only raw `request`               | ✅ Yes — `context.session`, params, etc.      |
+  | **Can redirect?**             | ❌ Not directly                           | ✅ Yes — `throw redirect(...)`                |
+  | **Can extend route context?** | ❌ No                                     | ✅ Yes — returned object is merged in         |
+  | **Intercepts POST/PUT/etc.**  | ✅ Yes — all HTTP methods                 | ❌ No — GET navigations only                  |
+  | **Best use case**             | Logging, rate limiting, raw HTTP concerns | Auth guards, role checks, redirects           |
+  | **Passes control via**        | `return next()` — mandatory               | Returns value or throws `redirect`            |
+  | **Reusable across routes?**   | ✅ Yes — import and add to array          | ⚠️ Requires extracting a shared function     |
+
+  In this project, route protection looks like this with `beforeLoad`:
+
+```ts
+  // src/routes/products/create-product.tsx
+  export const Route = createFileRoute("/products/create-product")({
+    beforeLoad: async ({ context }) => {
+      const session = context.session; // resolved once in __root.tsx beforeLoad
+      if (!session) throw redirect({ to: "/sign-in" });
+      if (session.user.role !== "admin") throw redirect({ to: "/" });
+      return { user: session.user }; // merged into route context
+    },
+    component: RouteComponent,
+  });
+```
+
+  And for complete security, the server function itself also validates the session independently — covered in Phase 8.
 
 - [x] <a id="p2-s5"></a>**Step 5 — TanStack Query integration** ⚡
 
