@@ -1,20 +1,6 @@
 import { useMemo, useState } from "react";
 import type { DataToolbarProps } from "@/components/DataToolbar";
-
-export type OrderData = {
-	id: string;
-	user: { name: string; email: string };
-	status: "pending" | "paid" | "failed";
-	total: string;
-	createdAt: Date;
-	items: {
-		id: string;
-		name: string;
-		price: string;
-		quantity: number;
-		image: string;
-	}[];
-};
+import type { OrderData } from "@/data/orders";
 
 const SORT_OPTIONS = [
 	{ label: "Customer A → Z", value: "name-asc" },

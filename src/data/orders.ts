@@ -168,3 +168,5 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
 			.set({ status: data.status })
 			.where(eq(orders.id, data.orderId));
 	});
+
+export type OrderData = Awaited<ReturnType<typeof getAllOrders>>[number];

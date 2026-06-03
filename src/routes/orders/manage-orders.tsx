@@ -39,8 +39,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import type { OrderData } from "@/data/orders";
 import { getAllOrders, updateOrderStatus } from "@/data/orders";
-import { type OrderData, useOrderFilters } from "@/hooks/useOrderFilters";
+import { useOrderFilters } from "@/hooks/useOrderFilters";
 
 const statusStyles = {
 	pending:

@@ -134,6 +134,7 @@
   - [Step 4 — Wire into /products](#p16-s4)
   - [Step 5 — Wire into manage-products](#p16-s5)
   - [Step 6 — Wire into manage-orders](#p16-s6)
+  - [How to implement DataToolbar on any page](#p16-implementation)
 
 ---
 
@@ -5512,7 +5513,7 @@ When `confirmOrder` verifies the payment with Stripe and updates the order to "p
 
 ### Phase 16 — Search, Filter & Sort
 
-![phase16](./assets/datatoolbar_architecture.svg)
+![phase16](./assets/phase16_architecture_updated.svg)
 
 - [x] <a id="p16-s1"></a>**Step 1 — Create `src/components/DataToolbar.tsx`** 🔍
 
@@ -5812,9 +5813,17 @@ When `confirmOrder` verifies the payment with Stripe and updates the order to "p
 
 - [x] <a id="p16-s3"></a>**Step 3 — Create `src/hooks/useOrderFilters.ts`** 🧩
 
-  Same pattern as `useProductFilters` but shaped for order data. Three things specific to this hook:
+  Same pattern as `useProductFilters` but shaped for order data. Before creating the hook, add one line to the bottom of `src/data/orders.ts`:
 
-  `OrderData` is exported from the hook itself — the route imports it from here instead of inferring it inline, keeping it co-located with the logic that uses it.
+  ```ts
+  export type OrderData = Awaited<ReturnType<typeof getAllOrders>>[number];
+  ```
+
+  `Awaited` unwraps the `Promise`, `ReturnType` extracts what `getAllOrders` returns, and `[number]` indexes into the array to get a single element's type. This way the type is always in sync with the server function — if the query projection changes, the type updates automatically.
+
+  Three things specific to the hook itself:
+
+  `OrderData` is not defined manually — the hook imports it from `@/data/orders`, keeping the type co-located with the data source instead of duplicating it.
 
   The date filter uses `getFullYear()`, `getMonth()`, `getDate()` instead of `toISOString()` — this reads the date in local timezone, preventing an off-by-one day bug that happens when the server is ahead of UTC.
 
@@ -5823,21 +5832,7 @@ When `confirmOrder` verifies the payment with Stripe and updates the order to "p
   ```ts
   import { useMemo, useState } from "react";
   import type { DataToolbarProps } from "@/components/DataToolbar";
-
-  export type OrderData = {
-  	id: string;
-  	user: { name: string; email: string };
-  	status: "pending" | "paid" | "failed";
-  	total: string;
-  	createdAt: Date;
-  	items: {
-  		id: string;
-  		name: string;
-  		price: string;
-  		quantity: number;
-  		image: string;
-  	}[];
-  };
+  import type { OrderData } from "@/data/orders";
 
   const SORT_OPTIONS = [
   	{ label: "Customer A → Z", value: "name-asc" },
@@ -6030,13 +6025,14 @@ When `confirmOrder` verifies the payment with Stripe and updates the order to "p
 
 - [x] <a id="p16-s6"></a>**Step 6 — Wire into `manage-orders` (`src/routes/orders/manage-orders.tsx`)** 🔌
 
-  Four additions to the existing file — nothing removed, nothing restructured. One extra note: the inline `type OrderData = (typeof orders)[number]` that previously lived inside the component is removed — the type is now imported from the hook instead, consistent with how `ProductSelect` works in `manage-products`.
+  Four additions to the existing file — nothing removed, nothing restructured. `OrderData` is imported from `@/data/orders`, where it's inferred directly from `getAllOrders`'s return type — no manual type definition needed in the route.
 
-  Add two imports at the top:
+  Add three imports at the top:
 
   ```ts
   import { DataToolbar } from "@/components/DataToolbar";
-  import { useOrderFilters, type OrderData } from "@/hooks/useOrderFilters";
+  import { type OrderData } from "@/data/orders";
+  import { useOrderFilters } from "@/hooks/useOrderFilters";
   ```
 
   Add the hook inside `ManageOrdersPage`, right after `const orders = Route.useLoaderData()`, and remove the inline `type OrderData` line:
@@ -6069,6 +6065,22 @@ When `confirmOrder` verifies the payment with Stripe and updates the order to "p
   	</CardHeader>
   </Card>
   ```
+
+---
+
+<a id="p16-implementation"></a>**How to implement DataToolbar on any page**
+
+![DataToolbar](./assets/datatoolbar_implementation_guide.svg)
+
+To implement `DataToolbar` on any new page, you only do three things:
+
+**Step 1 — Write a hook (`useXFilters.ts`).** This is the only file where you think about filters. Add a `useState` per filter axis, a `useMemo` that filters and sorts the array, and a `toolbar` object that wires every state to its setter. Return `{ filtered, toolbar }`.
+
+**Step 2 — Wire it in the route.** Call `const { filtered, toolbar } = useXFilters(data)` right after you get the data. Then pass `filtered` to your grid or table instead of the raw array.
+
+**Step 3 — Drop the component.** Place `<DataToolbar {...toolbar} />` wherever you want the toolbar to appear in the UI. The spread operator handles everything — no individual props to wire manually.
+
+`DataToolbar` itself never changes. The only work per new page is writing the hook.
 
 ---
 
