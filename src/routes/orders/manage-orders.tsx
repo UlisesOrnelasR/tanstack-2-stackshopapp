@@ -8,6 +8,7 @@ import {
 import { Eye } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { DataToolbar } from "#/components/DataToolbar";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -39,6 +40,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { getAllOrders, updateOrderStatus } from "@/data/orders";
+import { useOrderFilters } from "@/hooks/useOrderFilters";
 
 const statusStyles = {
 	pending:
@@ -61,6 +63,7 @@ export const Route = createFileRoute("/orders/manage-orders")({
 // ── Component ──
 function ManageOrdersPage() {
 	const orders = Route.useLoaderData();
+	const { filtered, toolbar } = useOrderFilters(orders);
 	const router = useRouter();
 
 	type OrderData = (typeof orders)[number];
@@ -137,7 +140,7 @@ function ManageOrdersPage() {
 	];
 
 	const table = useReactTable({
-		data: orders,
+		data: filtered,
 		columns,
 		getCoreRowModel: getCoreRowModel(),
 	});
@@ -151,6 +154,7 @@ function ManageOrdersPage() {
 						<CardDescription>
 							View all customer orders and their details.
 						</CardDescription>
+						<DataToolbar {...toolbar} />
 					</CardHeader>
 				</Card>
 

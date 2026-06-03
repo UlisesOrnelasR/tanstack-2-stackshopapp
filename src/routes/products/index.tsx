@@ -1,14 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { createMiddleware } from "@tanstack/react-start";
-import { ProductCard } from "#/components/ProductCard";
 import { getAllProducts } from "#/data/products";
+import { DataToolbar } from "@/components/DataToolbar";
+import { ProductCard } from "@/components/ProductCard";
 import {
 	Card,
 	CardDescription,
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { useProductFilters } from "@/hooks/useProductFilters";
 
 const loggerMiddleware = createMiddleware().server(
 	async ({ next, request }) => {
@@ -23,11 +25,7 @@ const loggerMiddleware = createMiddleware().server(
 );
 
 export const Route = createFileRoute("/products/")({
-	loader: async () => {
-		// console.log("---loader--");
-		return getAllProducts();
-	},
-
+	loader: async () => getAllProducts(),
 	component: RouteComponent,
 	server: {
 		middleware: [loggerMiddleware],
@@ -56,7 +54,7 @@ function RouteComponent() {
 		initialData: products,
 	});
 
-	console.log(data);
+	const { filtered, toolbar } = useProductFilters(data);
 
 	return (
 		<div className="space-y-6">
@@ -76,16 +74,23 @@ function RouteComponent() {
 								Browse a minimal, production-flavoured catalog with TanStack
 								Start server functions and typed routes.
 							</CardDescription>
+							<DataToolbar {...toolbar} />
 						</div>
 					</div>
 				</Card>
 			</section>
-			<section>
-				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{data?.map((product, index) => (
-						<ProductCard key={`product-${index}`} product={product} />
-					))}
-				</div>
+			<section className="max-w-6xl mx-auto">
+				{filtered.length > 0 ? (
+					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						{filtered.map((product) => (
+							<ProductCard key={product.id} product={product} />
+						))}
+					</div>
+				) : (
+					<p className="text-center text-sm text-slate-500 py-16">
+						No products match your filters.
+					</p>
+				)}
 			</section>
 		</div>
 	);

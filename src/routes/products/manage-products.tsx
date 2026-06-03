@@ -9,6 +9,7 @@ import imageCompression from "browser-image-compression";
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { DataToolbar } from "@/components/DataToolbar";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -60,6 +61,7 @@ import {
 	uploadProductImage,
 } from "@/data/products";
 import type { BadgeValue, InventoryValue, ProductSelect } from "@/db/schema";
+import { useProductFilters } from "@/hooks/useProductFilters";
 
 export const Route = createFileRoute("/products/manage-products")({
 	beforeLoad: async ({ context }) => {
@@ -74,6 +76,7 @@ export const Route = createFileRoute("/products/manage-products")({
 
 function ManageProductsPage() {
 	const products = Route.useLoaderData();
+	const { filtered, toolbar } = useProductFilters(products);
 	const router = useRouter();
 
 	// Edit dialog state
@@ -280,11 +283,10 @@ function ManageProductsPage() {
 	];
 
 	const table = useReactTable({
-		data: products,
+		data: filtered,
 		columns,
 		getCoreRowModel: getCoreRowModel(),
 	});
-
 	return (
 		<div className="mx-auto max-w-7xl py-8 px-4">
 			<div className="space-y-6">
@@ -294,6 +296,7 @@ function ManageProductsPage() {
 						<CardDescription>
 							Edit or remove products from the catalog.
 						</CardDescription>
+						<DataToolbar {...toolbar} />
 					</CardHeader>
 				</Card>
 
