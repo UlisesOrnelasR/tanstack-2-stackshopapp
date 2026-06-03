@@ -127,6 +127,13 @@
 - [👤 Phase 15 — User Profile & Avatar Upload](#phase-15)
   - [Step 1 — Profile page layout with edit Dialog](#p15-s1)
   - [Step 2 — Server functions & wiring the edit Dialog](#p15-s2)
+- [🔍 Phase 16 — Search, Filter & Sort](#phase-16)
+  - [Step 1 — Create src/components/DataToolbar.tsx](#p16-s1)
+  - [Step 2 — Create src/hooks/useProductFilters.ts](#p16-s2)
+  - [Step 3 — Create src/hooks/useOrderFilters.ts](#p16-s3)
+  - [Step 4 — Wire into /products](#p16-s4)
+  - [Step 5 — Wire into manage-products](#p16-s5)
+  - [Step 6 — Wire into manage-orders](#p16-s6)
 
 ---
 
@@ -5496,6 +5503,572 @@ When `confirmOrder` verifies the payment with Stripe and updates the order to "p
   ```
 
   `router.invalidate()` re-runs `__root` `beforeLoad` which re-fetches the session — the Header dropdown and profile page both update with the new name/image immediately. If no new image was selected (`compressedFile` is `null`), the spread `...(imageUrl ? { image: imageUrl } : {})` omits the `image` field, and `updateProfile` leaves the current avatar untouched.
+
+---
+
+---
+
+<a id="phase-16"></a>
+
+### Phase 16 — Search, Filter & Sort
+
+![phase16](./assets/datatoolbar_architecture.svg)
+
+- [x] <a id="p16-s1"></a>**Step 1 — Create `src/components/DataToolbar.tsx`** 🔍
+
+  A fully reusable toolbar component that owns zero state — it only renders UI and fires callbacks. Any page can use it by passing the right props.
+
+  Two design decisions worth noting:
+
+  The `filters` prop is a generic array — each entry is a dropdown with its own options, value, and `onChange`. Adding a new filter to any page never requires touching `DataToolbar` itself.
+
+  The `__reset__` sentinel is the first `<SelectItem>` in every dropdown. When selected it maps to `""` in `onValueChange`, which clears that filter — letting shadcn's `<SelectValue>` show the placeholder naturally when the value is empty.
+
+  The `dateRange` prop is optional — only `manage-orders` passes it. If not passed, the date inputs simply don't render. `products` and `manage-products` are completely unaffected.
+
+  ```ts
+  import { RotateCcw, Search, X } from "lucide-react";
+  import { Button } from "@/components/ui/button";
+  import { Input } from "@/components/ui/input";
+  import {
+  	Select,
+  	SelectContent,
+  	SelectItem,
+  	SelectTrigger,
+  	SelectValue,
+  } from "@/components/ui/select";
+
+  export type FilterOption = {
+  	label: string;
+  	value: string;
+  };
+
+  export type DataToolbarProps = {
+  	searchValue: string;
+  	onSearchChange: (value: string) => void;
+  	searchPlaceholder?: string;
+  	filters?: {
+  		label: string;
+  		value: string;
+  		placeholder: string;
+  		options: FilterOption[];
+  		onChange: (value: string) => void;
+  		width?: string;
+  	}[];
+  	sortOptions?: FilterOption[];
+  	sortValue: string;
+  	onSortChange: (value: string) => void;
+  	dateRange?: {
+  		from: string;
+  		to: string;
+  		onFromChange: (value: string) => void;
+  		onToChange: (value: string) => void;
+  	};
+  	isDirty: boolean;
+  	onReset: () => void;
+  	resultCount?: { filtered: number; total: number };
+  };
+
+  export function DataToolbar({
+  	searchValue,
+  	onSearchChange,
+  	searchPlaceholder = "Search...",
+  	filters = [],
+  	sortOptions = [],
+  	sortValue,
+  	onSortChange,
+  	isDirty,
+  	onReset,
+  	dateRange,
+  	resultCount,
+  }: DataToolbarProps) {
+  	return (
+  		<div className="flex flex-col gap-3 mt-4">
+  			<div className="flex flex-wrap items-center gap-2">
+  				{/* Search input */}
+  				<div className="relative flex-1 min-w-50">
+  					<Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+  					<Input
+  						value={searchValue}
+  						onChange={(e) => onSearchChange(e.target.value ?? "")}
+  						placeholder={searchPlaceholder}
+  						className="pl-9 pr-8"
+  					/>
+  					{searchValue && (
+  						<button
+  							type="button"
+  							onClick={() => onSearchChange("")}
+  							className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+  							aria-label="Clear search"
+  						>
+  							<X size={14} />
+  						</button>
+  					)}
+  				</div>
+
+  				{/* Dynamic filter dropdowns (inventory, status, badge…) */}
+  				{filters.map((filter) => (
+  					<Select
+  						key={filter.placeholder}
+  						value={filter.value}
+  						onValueChange={(v) =>
+  							filter.onChange(v === "__reset__" ? "" : (v ?? ""))
+  						}
+  					>
+  						<SelectTrigger className={filter.width ?? "w-40"}>
+  							<SelectValue placeholder={filter.placeholder} />
+  						</SelectTrigger>
+  						<SelectContent>
+  							<SelectItem value="__reset__">{filter.placeholder}</SelectItem>
+  							{filter.options.map((opt) => (
+  								<SelectItem key={opt.value} value={opt.value}>
+  									{opt.label}
+  								</SelectItem>
+  							))}
+  						</SelectContent>
+  					</Select>
+  				))}
+
+  				{/* Date range — only renders when dateRange prop is passed */}
+  				{dateRange && (
+  					<div className="flex items-center gap-2">
+  						<Input
+  							type="date"
+  							value={dateRange.from}
+  							onChange={(e) => dateRange.onFromChange(e.target.value ?? "")}
+  							className="w-37.5 text-sm"
+  						/>
+  						<span className="text-xs text-slate-400">to</span>
+  						<Input
+  							type="date"
+  							value={dateRange.to}
+  							onChange={(e) => dateRange.onToChange(e.target.value ?? "")}
+  							className="w-37.5 text-sm"
+  						/>
+  					</div>
+  				)}
+
+  				{/* Sort dropdown */}
+  				{sortOptions.length > 0 && (
+  					<Select
+  						value={sortValue}
+  						onValueChange={(v) =>
+  							onSortChange(v === "__reset__" ? "" : (v ?? ""))
+  						}
+  					>
+  						<SelectTrigger className="w-45">
+  							<SelectValue placeholder="Sort by..." />
+  						</SelectTrigger>
+  						<SelectContent>
+  							<SelectItem value="__reset__">Sort by...</SelectItem>
+  							{sortOptions.map((opt) => (
+  								<SelectItem key={opt.value} value={opt.value}>
+  									{opt.label}
+  								</SelectItem>
+  							))}
+  						</SelectContent>
+  					</Select>
+  				)}
+
+  				{/* Reset button — only visible when any filter is active */}
+  				{isDirty && (
+  					<Button
+  						variant="outline"
+  						size="sm"
+  						onClick={onReset}
+  						className="gap-1.5 text-slate-500"
+  					>
+  						<RotateCcw size={13} />
+  						Reset
+  					</Button>
+  				)}
+  			</div>
+
+  			{/* Result count — only shown when filters are active */}
+  			{resultCount && isDirty && (
+  				<p className="text-xs text-slate-400">
+  					Showing{" "}
+  					<span className="font-medium text-slate-600 dark:text-slate-300">
+  						{resultCount.filtered}
+  					</span>{" "}
+  					of {resultCount.total} results
+  				</p>
+  			)}
+  		</div>
+  	);
+  }
+  ```
+
+- [x] <a id="p16-s2"></a>**Step 2 — Create `src/hooks/useProductFilters.ts`** 🧩
+
+  Encapsulates all filter and sort logic for product pages. Takes the raw `products` array, returns `filtered` (the processed array) and `toolbar` (the complete props object ready to spread into `<DataToolbar />`).
+
+  Three things worth noting:
+
+  `ProductSelect` is imported directly from the schema — the hook is fully typed against your real database shape, no manual type needed.
+
+  The options arrays (`SORT_OPTIONS`, `INVENTORY_OPTIONS`, `BADGE_OPTIONS`) are defined outside the component so React doesn't recreate them on every render.
+
+  The `toolbar` object is assembled inside the hook — the route just does `<DataToolbar {...toolbar} />` and nothing else. The route never touches a filter state directly.
+
+  ```ts
+  import { useMemo, useState } from "react";
+  import type { DataToolbarProps } from "@/components/DataToolbar";
+  import type { ProductSelect } from "@/db/schema";
+
+  const SORT_OPTIONS = [
+  	{ label: "Name A → Z", value: "name-asc" },
+  	{ label: "Name Z → A", value: "name-desc" },
+  	{ label: "Price low → high", value: "price-asc" },
+  	{ label: "Price high → low", value: "price-desc" },
+  	{ label: "Top rated", value: "rating-desc" },
+  ];
+
+  const INVENTORY_OPTIONS = [
+  	{ label: "In stock", value: "in-stock" },
+  	{ label: "Backorder", value: "backorder" },
+  	{ label: "Preorder", value: "preorder" },
+  ];
+
+  const BADGE_OPTIONS = [
+  	{ label: "New", value: "New" },
+  	{ label: "Sale", value: "Sale" },
+  	{ label: "Featured", value: "Featured" },
+  	{ label: "Limited", value: "Limited" },
+  ];
+
+  type UseProductFiltersReturn = {
+  	filtered: ProductSelect[];
+  	toolbar: DataToolbarProps;
+  };
+
+  export function useProductFilters(
+  	products: ProductSelect[],
+  ): UseProductFiltersReturn {
+  	const [search, setSearch] = useState("");
+  	const [inventory, setInventory] = useState("");
+  	const [badge, setBadge] = useState("");
+  	const [sort, setSort] = useState("");
+
+  	const isDirty = !!(search || inventory || badge || sort);
+
+  	const filtered = useMemo(() => {
+  		let result = [...products];
+
+  		if (search) {
+  			const q = search.toLowerCase();
+  			result = result.filter((p) => p.name.toLowerCase().includes(q));
+  		}
+  		if (inventory) result = result.filter((p) => p.inventory === inventory);
+  		if (badge) result = result.filter((p) => p.badge === badge);
+
+  		if (sort === "name-asc") result.sort((a, b) => a.name.localeCompare(b.name));
+  		if (sort === "name-desc") result.sort((a, b) => b.name.localeCompare(a.name));
+  		if (sort === "price-asc") result.sort((a, b) => Number(a.price) - Number(b.price));
+  		if (sort === "price-desc") result.sort((a, b) => Number(b.price) - Number(a.price));
+  		if (sort === "rating-desc") result.sort((a, b) => Number(b.rating) - Number(a.rating));
+
+  		return result;
+  	}, [products, search, inventory, badge, sort]);
+
+  	const toolbar: DataToolbarProps = {
+  		searchValue: search,
+  		onSearchChange: setSearch,
+  		searchPlaceholder: "Search products by name...",
+  		filters: [
+  			{
+  				label: "inventory",
+  				value: inventory,
+  				placeholder: "All inventory",
+  				options: INVENTORY_OPTIONS,
+  				onChange: setInventory,
+  				width: "w-[150px]",
+  			},
+  			{
+  				label: "badges",
+  				value: badge,
+  				placeholder: "All badges",
+  				options: BADGE_OPTIONS,
+  				onChange: setBadge,
+  				width: "w-[140px]",
+  			},
+  		],
+  		sortOptions: SORT_OPTIONS,
+  		sortValue: sort,
+  		onSortChange: setSort,
+  		isDirty,
+  		onReset: () => {
+  			setSearch("");
+  			setInventory("");
+  			setBadge("");
+  			setSort("");
+  		},
+  		resultCount: { filtered: filtered.length, total: products.length },
+  	};
+
+  	return { filtered, toolbar };
+  }
+  ```
+
+- [x] <a id="p16-s3"></a>**Step 3 — Create `src/hooks/useOrderFilters.ts`** 🧩
+
+  Same pattern as `useProductFilters` but shaped for order data. Three things specific to this hook:
+
+  `OrderData` is exported from the hook itself — the route imports it from here instead of inferring it inline, keeping it co-located with the logic that uses it.
+
+  The date filter uses `getFullYear()`, `getMonth()`, `getDate()` instead of `toISOString()` — this reads the date in local timezone, preventing an off-by-one day bug that happens when the server is ahead of UTC.
+
+  Date-based sort options (`date-desc`, `date-asc`) are removed from `SORT_OPTIONS` because `dateFrom`/`dateTo` already handles date filtering. Having both would be redundant.
+
+  ```ts
+  import { useMemo, useState } from "react";
+  import type { DataToolbarProps } from "@/components/DataToolbar";
+
+  export type OrderData = {
+  	id: string;
+  	user: { name: string; email: string };
+  	status: "pending" | "paid" | "failed";
+  	total: string;
+  	createdAt: Date;
+  	items: {
+  		id: string;
+  		name: string;
+  		price: string;
+  		quantity: number;
+  		image: string;
+  	}[];
+  };
+
+  const SORT_OPTIONS = [
+  	{ label: "Customer A → Z", value: "name-asc" },
+  	{ label: "Customer Z → A", value: "name-desc" },
+  	{ label: "Total high → low", value: "total-desc" },
+  	{ label: "Total low → high", value: "total-asc" },
+  ];
+
+  const STATUS_OPTIONS = [
+  	{ label: "Paid", value: "paid" },
+  	{ label: "Pending", value: "pending" },
+  	{ label: "Failed", value: "failed" },
+  ];
+
+  type UseOrderFiltersReturn = {
+  	filtered: OrderData[];
+  	toolbar: DataToolbarProps;
+  };
+
+  export function useOrderFilters(orders: OrderData[]): UseOrderFiltersReturn {
+  	const [search, setSearch] = useState("");
+  	const [status, setStatus] = useState("");
+  	const [sort, setSort] = useState("");
+  	const [dateFrom, setDateFrom] = useState("");
+  	const [dateTo, setDateTo] = useState("");
+
+  	const isDirty = !!(search || status || dateFrom || dateTo || sort);
+
+  	const filtered = useMemo(() => {
+  		let result = [...orders];
+
+  		if (search) {
+  			const q = search.toLowerCase();
+  			result = result.filter(
+  				(o) =>
+  					o.user.name.toLowerCase().includes(q) ||
+  					o.user.email.toLowerCase().includes(q),
+  			);
+  		}
+
+  		if (status) result = result.filter((o) => o.status === status);
+
+  		if (dateFrom) {
+  			result = result.filter((o) => {
+  				const d = new Date(o.createdAt);
+  				const orderDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  				return orderDate >= dateFrom;
+  			});
+  		}
+
+  		if (dateTo) {
+  			result = result.filter((o) => {
+  				const d = new Date(o.createdAt);
+  				const orderDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  				return orderDate <= dateTo;
+  			});
+  		}
+
+  		if (sort === "name-asc") result.sort((a, b) => a.user.name.localeCompare(b.user.name));
+  		if (sort === "name-desc") result.sort((a, b) => b.user.name.localeCompare(a.user.name));
+  		if (sort === "total-desc") result.sort((a, b) => Number(b.total) - Number(a.total));
+  		if (sort === "total-asc") result.sort((a, b) => Number(a.total) - Number(b.total));
+
+  		return result;
+  	}, [orders, search, status, dateFrom, dateTo, sort]);
+
+  	const toolbar: DataToolbarProps = {
+  		searchValue: search,
+  		onSearchChange: setSearch,
+  		searchPlaceholder: "Search by customer or email...",
+  		filters: [
+  			{
+  				label: "statuses",
+  				value: status,
+  				placeholder: "All statuses",
+  				options: STATUS_OPTIONS,
+  				onChange: setStatus,
+  				width: "w-[150px]",
+  			},
+  		],
+  		sortOptions: SORT_OPTIONS,
+  		sortValue: sort,
+  		onSortChange: setSort,
+  		isDirty,
+  		onReset: () => {
+  			setSearch("");
+  			setStatus("");
+  			setDateFrom("");
+  			setDateTo("");
+  			setSort("");
+  		},
+  		dateRange: {
+  			from: dateFrom,
+  			to: dateTo,
+  			onFromChange: setDateFrom,
+  			onToChange: setDateTo,
+  		},
+  		resultCount: { filtered: filtered.length, total: orders.length },
+  	};
+
+  	return { filtered, toolbar };
+  }
+  ```
+
+- [x] <a id="p16-s4"></a>**Step 4 — Wire into `/products` (`src/routes/products/index.tsx`)** 🔌
+
+  Three additions to the existing file — nothing removed, nothing restructured.
+
+  Add two imports at the top:
+
+  ```ts
+  import { DataToolbar } from "@/components/DataToolbar";
+  import { useProductFilters } from "@/hooks/useProductFilters";
+  ```
+
+  Add the hook inside `RouteComponent`, right after `useQuery`:
+
+  ```ts
+  const { filtered, toolbar } = useProductFilters(data);
+  ```
+
+  Replace `data?.map(...)` with `filtered.map(...)` in the grid section and add the empty state fallback:
+
+  ```tsx
+  <section className="max-w-6xl mx-auto">
+  	{filtered.length > 0 ? (
+  		<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  			{filtered.map((product) => (
+  				<ProductCard key={product.id} product={product} />
+  			))}
+  		</div>
+  	) : (
+  		<p className="text-center text-sm text-slate-500 py-16">
+  			No products match your filters.
+  		</p>
+  	)}
+  </section>
+  ```
+
+  Add `<DataToolbar>` inside the Card, right after `<CardDescription>`:
+
+  ```tsx
+  <CardDescription className="text-sm text-slate-600">
+  	Browse a minimal, production-flavoured catalog with TanStack
+  	Start server functions and typed routes.
+  </CardDescription>
+  <DataToolbar {...toolbar} />
+  ```
+
+- [x] <a id="p16-s5"></a>**Step 5 — Wire into `manage-products` (`src/routes/products/manage-products.tsx`)** 🔌
+
+  Four additions to the existing file — nothing removed, nothing restructured.
+
+  Add two imports at the top:
+
+  ```ts
+  import { DataToolbar } from "@/components/DataToolbar";
+  import { useProductFilters } from "@/hooks/useProductFilters";
+  ```
+
+  Add the hook inside `ManageProductsPage`, right after `const products = Route.useLoaderData()`:
+
+  ```ts
+  const { filtered, toolbar } = useProductFilters(products);
+  ```
+
+  Change `data: products` to `data: filtered` in `useReactTable`:
+
+  ```ts
+  const table = useReactTable({
+  	data: filtered, // ← was: products
+  	columns,
+  	getCoreRowModel: getCoreRowModel(),
+  });
+  ```
+
+  Add `<DataToolbar>` inside the first `<CardHeader>`, right after `<CardDescription>`:
+
+  ```tsx
+  <Card>
+  	<CardHeader>
+  		<CardTitle className="text-lg">Manage Products</CardTitle>
+  		<CardDescription>
+  			Edit or remove products from the catalog.
+  		</CardDescription>
+  		<DataToolbar {...toolbar} />
+  	</CardHeader>
+  </Card>
+  ```
+
+- [x] <a id="p16-s6"></a>**Step 6 — Wire into `manage-orders` (`src/routes/orders/manage-orders.tsx`)** 🔌
+
+  Four additions to the existing file — nothing removed, nothing restructured. One extra note: the inline `type OrderData = (typeof orders)[number]` that previously lived inside the component is removed — the type is now imported from the hook instead, consistent with how `ProductSelect` works in `manage-products`.
+
+  Add two imports at the top:
+
+  ```ts
+  import { DataToolbar } from "@/components/DataToolbar";
+  import { useOrderFilters, type OrderData } from "@/hooks/useOrderFilters";
+  ```
+
+  Add the hook inside `ManageOrdersPage`, right after `const orders = Route.useLoaderData()`, and remove the inline `type OrderData` line:
+
+  ```ts
+  const { filtered, toolbar } = useOrderFilters(orders);
+  // remove: type OrderData = (typeof orders)[number]
+  ```
+
+  Change `data: orders` to `data: filtered` in `useReactTable`:
+
+  ```ts
+  const table = useReactTable({
+  	data: filtered, // ← was: orders
+  	columns,
+  	getCoreRowModel: getCoreRowModel(),
+  });
+  ```
+
+  Add `<DataToolbar>` inside the first `<CardHeader>`, right after `<CardDescription>`:
+
+  ```tsx
+  <Card>
+  	<CardHeader>
+  		<CardTitle className="text-lg">Manage Orders</CardTitle>
+  		<CardDescription>
+  			View all customer orders and their details.
+  		</CardDescription>
+  		<DataToolbar {...toolbar} />
+  	</CardHeader>
+  </Card>
+  ```
 
 ---
 

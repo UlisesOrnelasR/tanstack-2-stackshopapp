@@ -45,14 +45,9 @@ export function useProductFilters(
 			const q = search.toLowerCase();
 			result = result.filter((p) => p.name.toLowerCase().includes(q));
 		}
-
-		if (inventory) {
-			result = result.filter((p) => p.inventory === inventory);
-		}
-
-		if (badge) {
-			result = result.filter((p) => p.badge === badge);
-		}
+		if (inventory) result.filter((p) => p.inventory === inventory);
+		if (inventory) result = result.filter((p) => p.inventory === inventory);
+		if (badge) result = result.filter((p) => p.badge === badge);
 
 		if (sort === "name-asc")
 			result.sort((a, b) => a.name.localeCompare(b.name));

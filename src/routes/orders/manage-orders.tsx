@@ -40,7 +40,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { getAllOrders, updateOrderStatus } from "@/data/orders";
-import { useOrderFilters } from "@/hooks/useOrderFilters";
+import { type OrderData, useOrderFilters } from "@/hooks/useOrderFilters";
 
 const statusStyles = {
 	pending:
@@ -65,8 +65,6 @@ function ManageOrdersPage() {
 	const orders = Route.useLoaderData();
 	const { filtered, toolbar } = useOrderFilters(orders);
 	const router = useRouter();
-
-	type OrderData = (typeof orders)[number];
 
 	const [viewingOrder, setViewingOrder] = useState<OrderData | null>(null);
 	const [updatingId, setUpdatingId] = useState<string | null>(null);

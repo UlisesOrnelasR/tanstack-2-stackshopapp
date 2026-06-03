@@ -99,7 +99,8 @@ export function DataToolbar({
 						</SelectContent>
 					</Select>
 				))}
-				{/* Date range */}
+
+				{/* Date range — only renders when dateRange prop is passed */}
 				{dateRange && (
 					<div className="flex items-center gap-2">
 						<Input
@@ -117,6 +118,7 @@ export function DataToolbar({
 						/>
 					</div>
 				)}
+
 				{/* Sort dropdown */}
 				{sortOptions.length > 0 && (
 					<Select
