@@ -403,6 +403,7 @@ BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
 
 SUPABASE_URL=https://fceond?????????.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 STRIPE_SECRET_KEY=
 
@@ -416,6 +417,7 @@ RESEND_API_KEY=re_your_full_key_here
 | `BETTER_AUTH_URL` | ✅ | Base URL used by Better Auth for redirects and callbacks |
 | `SUPABASE_URL` | ✅ | Supabase project URL — used by the storage client |
 | `SUPABASE_ANON_KEY` | ✅ | Public anon key for Supabase Storage operations |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Service role key — used server-side for image uploads, bypasses RLS |
 | `STRIPE_SECRET_KEY` | ✅ | Stripe secret key for Checkout session creation |
 | `RESEND_API_KEY` | ✅ | Resend API key for sending order confirmation emails |
 
