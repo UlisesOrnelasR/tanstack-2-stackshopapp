@@ -156,10 +156,18 @@
 | **Routing** | [TanStack Router](https://tanstack.com/router) — File-based, fully type-safe routing |
 | **Server State** | [TanStack Query](https://tanstack.com/query) — Client-side caching, background refetch |
 | **Forms** | [TanStack Form](https://tanstack.com/form) — Headless, field-level reactive forms |
+| **Tables** | [TanStack Table](https://tanstack.com/table) — Headless table for admin dashboards |
 | **Database** | [PostgreSQL](https://www.postgresql.org/) via [Supabase](https://supabase.com/) |
 | **ORM** | [Drizzle ORM](https://orm.drizzle.team/) — Type-safe query builder + migrations |
+| **Authentication** | [Better Auth](https://www.better-auth.com/) — Email/password auth with Drizzle adapter, role-based access |
+| **Payments** | [Stripe](https://stripe.com/) — Checkout Sessions, line items, payment verification |
+| **Storage** | [Supabase Storage](https://supabase.com/storage) — Product images + profile avatars via `@supabase/supabase-js` |
+| **Email** | [Resend](https://resend.com/) — Transactional HTML order confirmation emails |
+| **Notifications** | [Sonner](https://sonner.emilkowal.ski/) — Toast notifications for mutations and errors |
 | **Styling** | [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
 | **Validation** | [Zod](https://zod.dev/) — Runtime schema validation |
+| **Image Processing** | [browser-image-compression](https://github.com/Donaldcwl/browser-image-compression) — Client-side compression before upload |
+| **Icons** | [Lucide React](https://lucide.dev/) + [HugeIcons](https://hugeicons.com/) |
 | **Language** | [TypeScript](https://www.typescriptlang.org/) 5.7 |
 | **Toolchain** | [Vite](https://vitejs.dev/) 8 + [Biome](https://biomejs.dev/) (lint & format) |
 
@@ -169,16 +177,39 @@
 
 ## 💫 Application Features
 
+**Products**
 - **Product catalog** — browsable grid with badges, ratings, reviews, and inventory status
-- **Product detail page** — SSR with dynamic metadata (`<head>`) per product
+- **Product detail page** — SSR with dynamic `<head>` metadata per product (title, description, canonical)
 - **Streaming UI** — recommended products load via React 19 `use()` + `<Suspense>` with skeleton fallback
-- **Create product form** — field-level Zod validation via TanStack Form, writes to the real DB
-- **Shopping cart** — add, remove, update quantity, clear cart; all persisted in PostgreSQL
+- **Create product form** — field-level Zod validation via TanStack Form, image upload to Supabase Storage
+- **Admin product management** — inline edit and delete via Dialog; protected to `admin` role only
+- **Search, filter & sort** — `DataToolbar` component with live search, inventory filter, and sort across the catalog and admin panel
+
+**Cart & Checkout**
+- **Shopping cart** — add, remove, update quantity, clear cart; upsert pattern for duplicates; all persisted in PostgreSQL
 - **Cart badge in header** — live item count and total via `useQuery`, invalidated on every mutation
-- **Server Functions** — `createServerFn` for all data mutations (type-safe HTTP endpoints)
+- **Stripe Checkout** — creates a Checkout Session with line items, redirects to Stripe-hosted payment page
+- **Order confirmation** — verifies payment with Stripe on return, marks order as `paid`, clears the cart
+- **Product snapshots** — `order_items` stores name, price, and image at purchase time — decoupled from catalog changes
+
+**Orders**
+- **Order history** — user-facing page listing all past orders with items, quantities, and status
+- **Admin orders dashboard** — table of all orders joined with buyer info; update status (`pending` → `paid` → `failed`)
+- **Order confirmation email** — HTML email sent via Resend on successful payment; themeable via `StoreConfig`
+
+**Auth & Users**
+- **Email/password authentication** — register, login, logout via Better Auth + Drizzle adapter
+- **Session management** — session injected into root context via `beforeLoad`; `router.invalidate()` on auth changes
+- **Role-based access** — `admin` and `user` roles; routes and server functions both enforce role checks independently
+- **User profile** — view name, email, role, and avatar; edit via Dialog with client-side image compression + Supabase Storage upload
+- **Adaptive Header** — shows user dropdown with role badge and logout when authenticated; hides admin links for regular users
+
+**DX & Architecture**
+- **Server Functions** — `createServerFn` for all data mutations and queries; type-safe HTTP endpoints callable from loaders and components
 - **Middleware** — server-side request logging via `createMiddleware` on the `/products` route
-- **Query caching** — `useQuery` with `initialData` from the loader; no duplicate network requests
-- **Selective SSR** — each route controls its own rendering strategy independently
+- **Query caching** — `useQuery` with `initialData` from the loader; no duplicate network requests on mount
+- **Selective SSR** — each route controls its own rendering strategy (`ssr: true`, `"data-only"`, `ssr: false`) independently
+- **Toast notifications** — Sonner toasts on every mutation (add to cart, profile update, auth events, errors)
 
 ---
 
@@ -197,30 +228,57 @@
 ```
 src/
 ├── components/
-│   ├── Header.tsx                  ← global nav + cart badge (useQuery)
+│   ├── DataToolbar.tsx             ← search, filter & sort toolbar (Phase 16)
+│   ├── Header.tsx                  ← global nav + cart badge + user dropdown
 │   ├── ProductCard.tsx             ← card used in grids + add-to-cart button
 │   ├── RecommndedProducts.tsx      ← unwraps streamed Promise via use()
+│   ├── login-form.tsx              ← Better Auth sign-in form
+│   ├── signup-form.tsx             ← Better Auth sign-up form
 │   └── ui/                         ← shadcn/ui primitives (button, card, input…)
 ├── data/
-│   ├── products.ts                 ← getAllProducts · getProductById · createProduct
-│   └── cart.ts                     ← addToCart · fetchCartItems · removeFromCart · updateCartQuantity · clearCart · getCartItemsCount
-├── lib/
-│   ├── auth.ts                     ← Better Auth server instance (drizzle adapter + tanstackStartCookies)
-│   ├── auth-client.ts              ← Browser auth client (signIn · signUp · useSession)
-│   └── auth.functions.ts           ← getSession · ensureSession · sessionQueryKey
+│   ├── cart.ts                     ← addToCart · fetchCartItems · removeFromCart · updateCartQuantity · clearCart · getCartItemsCount
+│   ├── checkout.ts                 ← createCheckoutSession · confirmOrder
+│   ├── orders.ts                   ← getUserOrders · getAllOrders · updateOrderStatus
+│   ├── products.ts                 ← getAllProducts · getProductById · createProduct · updateProduct · deleteProduct
+│   └── user.ts                     ← updateUserProfile
 ├── db/
 │   ├── index.ts                    ← Drizzle client + pg Pool
-│   ├── schema.ts                   ← products + cart_items tables, enums, inferred types
+│   ├── schema.ts                   ← all tables, enums, inferred types
 │   └── seed.ts                     ← sample data (8 products)
+├── hooks/
+│   ├── useOrderFilters.ts          ← search + status filter state for orders
+│   └── useProductFilters.ts        ← search + sort state for products
+├── lib/
+│   ├── auth-client.ts              ← Browser auth client (signIn · signUp · useSession)
+│   ├── auth.functions.ts           ← getSession · ensureSession · sessionQueryKey
+│   ├── auth.ts                     ← Better Auth server instance (drizzle adapter + tanstackStartCookies)
+│   ├── email.ts                    ← Resend email sender (order confirmation)
+│   ├── supabase.ts                 ← Supabase Storage client (image uploads)
+│   └── utils.ts                    ← cn() utility helper
 ├── routes/
 │   ├── __root.tsx                  ← QueryClientProvider + Header + global shell
-│   ├── index.tsx                   ← / home (featured products, SSR loader)
+│   ├── api/
+│   │   └── auth/
+│   │       └── $.ts                ← Better Auth catch-all API handler
 │   ├── cart.tsx                    ← /cart page
-│   └── products/
-│       ├── index.tsx               ← /products catalog (middleware + useQuery)
-│       ├── $id.tsx                 ← /products/:id detail + streaming recommended
-│       └── create-product.tsx      ← /products/create-product form
-└── router.tsx                      ← router + QueryClient context injection
+│   ├── checkout/
+│   │   ├── cancel.tsx              ← /checkout/cancel
+│   │   └── success.tsx             ← /checkout/success (confirms order)
+│   ├── index.tsx                   ← / home (featured products, SSR loader)
+│   ├── orders/
+│   │   ├── index.tsx               ← /orders (user order history)
+│   │   └── manage-orders.tsx       ← /orders/manage-orders (admin dashboard)
+│   ├── products/
+│   │   ├── $id.tsx                 ← /products/:id detail + streaming recommended
+│   │   ├── create-product.tsx      ← /products/create-product form
+│   │   ├── index.tsx               ← /products catalog (middleware + useQuery)
+│   │   └── manage-products.tsx     ← /products/manage-products (admin CRUD)
+│   ├── profile.tsx                 ← /profile (user profile + avatar upload)
+│   ├── sign-in.tsx                 ← /sign-in
+│   └── sign-up.tsx                 ← /sign-up
+├── routeTree.gen.ts                ← auto-generated by TanStack Router
+├── router.tsx                      ← router + QueryClient context injection
+└── styles.css
 ```
 
 ---
@@ -253,6 +311,80 @@ src/
 | `quantity` | `integer` | Default `1` |
 | `created_at` | `timestamp` | Auto-set on insert |
 | `updated_at` | `timestamp` | Updated on quantity change |
+
+### `user` _(Better Auth)_
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `text` | Primary key |
+| `name` | `text` | Display name |
+| `email` | `text` | Unique |
+| `email_verified` | `boolean` | Default `false` |
+| `image` | `text` | Avatar URL, nullable |
+| `role` | `enum` | `admin` · `user` — default `user` |
+| `created_at` | `timestamp` | Auto-set on insert |
+| `updated_at` | `timestamp` | Auto-updated on change |
+
+### `session` _(Better Auth)_
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `text` | Primary key |
+| `expires_at` | `timestamp` | Session expiry |
+| `token` | `text` | Unique session token |
+| `ip_address` | `text` | Nullable |
+| `user_agent` | `text` | Nullable |
+| `user_id` | `text` | FK → `user.id` (cascade delete) |
+| `created_at` | `timestamp` | Auto-set on insert |
+| `updated_at` | `timestamp` | Auto-updated on change |
+
+### `account` _(Better Auth)_
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `text` | Primary key |
+| `account_id` | `text` | Provider account ID |
+| `provider_id` | `text` | e.g. `credential` |
+| `user_id` | `text` | FK → `user.id` (cascade delete) |
+| `password` | `text` | Hashed, nullable |
+| `access_token` | `text` | Nullable |
+| `refresh_token` | `text` | Nullable |
+| `created_at` | `timestamp` | Auto-set on insert |
+| `updated_at` | `timestamp` | Auto-updated on change |
+
+### `verification` _(Better Auth)_
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `text` | Primary key |
+| `identifier` | `text` | Email or user identifier |
+| `value` | `text` | Verification token |
+| `expires_at` | `timestamp` | Token expiry |
+| `created_at` | `timestamp` | Auto-set on insert |
+| `updated_at` | `timestamp` | Auto-updated on change |
+
+### `orders`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key, auto-generated |
+| `user_id` | `text` | FK → `user.id` (cascade delete) |
+| `stripe_session_id` | `text` | Stripe Checkout session ID, nullable |
+| `status` | `enum` | `pending` · `paid` · `failed` — default `pending` |
+| `total` | `numeric(10,2)` | Order total |
+| `created_at` | `timestamp` | Auto-set on insert |
+
+### `order_items`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key, auto-generated |
+| `order_id` | `uuid` | FK → `orders.id` (cascade delete) |
+| `product_id` | `uuid` | FK → `products.id` (set null on delete) |
+| `name` | `varchar(256)` | Product name snapshot at purchase time |
+| `price` | `numeric(10,2)` | Price snapshot at purchase time |
+| `quantity` | `integer` | Units purchased |
+| `image` | `varchar(512)` | Image URL snapshot at purchase time |
 
 > Types are derived via Drizzle's `$inferSelect` / `$inferInsert` — no manual interfaces needed.
 
