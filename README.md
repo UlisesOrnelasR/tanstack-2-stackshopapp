@@ -135,6 +135,16 @@
   - [Step 5 — Wire into manage-products](#p16-s5)
   - [Step 6 — Wire into manage-orders](#p16-s6)
   - [How to implement DataToolbar on any page](#p16-implementation)
+- [🚂 Phase 17 — Deploy to Railway](#phase-17)
+  - [Step 1 — Install the Railway preset package](#p17-s1)
+  - [Step 2 — Create tanstack.config.ts](#p17-s2)
+  - [Step 3 — Configure nixpacks.toml](#p17-s3)
+  - [Step 4 — Push to GitHub and create the Railway project](#p17-s4)
+  - [Step 5 — Add environment variables on Railway](#p17-s5)
+  - [Step 6 — Set the production domain](#p17-s6)
+  - [Step 7 — Update BETTER_AUTH_URL and add VITE_BETTER_AUTH_URL](#p17-s7)
+  - [Step 8 — Update src/lib/auth-client.ts](#p17-s8)
+  - [Step 9 — Redeploy](#p17-s9)
 
 ---
 
@@ -400,6 +410,7 @@ Create a `.env` file at the project root with the following variables:
 DATABASE_URL="postgresql://postgres.fceond?????????:?????????@aws-1-us-?????????-?????????.pooler.supabase.com:?????????/postgres"
 BETTER_AUTH_SECRET=MYtcOnjaZUd....
 BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
+VITE_BETTER_AUTH_URL=http://localhost:3000 # Client-side base URL (must be VITE_ prefixed)
 
 SUPABASE_URL=https://fceond?????????.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -415,6 +426,7 @@ RESEND_API_KEY=re_your_full_key_here
 | `DATABASE_URL` | ✅ | PostgreSQL connection string (Supabase session pooler) |
 | `BETTER_AUTH_SECRET` | ✅ | Signs and verifies session tokens — keep this secret |
 | `BETTER_AUTH_URL` | ✅ | Base URL used by Better Auth for redirects and callbacks |
+| `VITE_BETTER_AUTH_URL` | ✅ | Client-side base URL — Vite only exposes `VITE_` prefixed vars to the browser bundle |
 | `SUPABASE_URL` | ✅ | Supabase project URL — used by the storage client |
 | `SUPABASE_ANON_KEY` | ✅ | Public anon key for Supabase Storage operations |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Service role key — used server-side for image uploads, bypasses RLS |
@@ -6250,6 +6262,164 @@ To implement `DataToolbar` on any new page, you only do three things:
 **Step 3 — Drop the component.** Place `<DataToolbar {...toolbar} />` wherever you want the toolbar to appear in the UI. The spread operator handles everything — no individual props to wire manually.
 
 `DataToolbar` itself never changes. The only work per new page is writing the hook.
+
+---
+
+<a id="phase-17"></a>
+
+### Phase 17 — Deploy to Railway 🚂
+
+![phase17](./assets/phase17_railway_deploy.svg)
+
+> **Before deploying** — sync your lockfile to avoid `npm ci` failures on Railway:
+> ```powershell
+> Remove-Item -Recurse -Force node_modules
+> Remove-Item package-lock.json
+> npm install
+> ```
+> This regenerates a clean `package-lock.json` that matches your current `package.json` exactly. Skipping this step is the most common cause of broken Railway builds.
+
+- [x] <a id="p17-s1"></a>**Step 1 — Install the Railway preset package** 📦
+
+  ```bash
+  npm install -D @tanstack/react-start-config
+  ```
+
+  If you're already on the latest TanStack Start, also update:
+
+  ```bash
+  npm install @tanstack/react-start@latest
+  ```
+
+- [x] <a id="p17-s2"></a>**Step 2 — Create `tanstack.config.ts`** ⚙️
+
+  Create this file at the project root to tell TanStack Start to build for the Railway preset:
+
+  ```ts
+  import { defineConfig } from "@tanstack/react-start/config";
+
+  export default defineConfig({
+    server: {
+      preset: "railway",
+    },
+  });
+  ```
+
+  The `railway` preset configures Nitro's output format to match what Railway expects — a plain Node.js server entrypoint at `.output/server/index.mjs`.
+
+- [x] <a id="p17-s3"></a>**Step 3 — Configure `nixpacks.toml`** 🔧
+
+  Railway uses [Nixpacks](https://nixpacks.com) to build Node.js projects. By default, it detects a `package-lock.json` and runs `npm ci` — which fails if the lockfile is out of sync. Override the install phase explicitly to use `npm install` instead:
+
+  ```toml
+  [phases.setup]
+  nixPkgs = ["nodejs_22"]
+
+  [phases.install]
+  cmds = ["npm install"]
+
+  [phases.build]
+  cmds = ["npm run build"]
+
+  [start]
+  cmd = "npm run start"
+  ```
+
+  > **Why `[phases.install]` matters:** Railway's build pipeline has a separate install phase that runs before build. Without overriding it, Nixpacks defaults to `npm ci` — which is strict and will refuse to install if any package version in `package.json` doesn't match the lockfile exactly. Defining `[phases.install]` replaces that default.
+
+- [x] <a id="p17-s4"></a>**Step 4 — Push to GitHub and create the Railway project** 🚀
+
+  Commit all changes and push to GitHub:
+
+  ```bash
+  git add .
+  git commit -m "chore: configure Railway deployment"
+  git push
+  ```
+
+  Then in [Railway](https://railway.app):
+  1. Click **New Project → Deploy from GitHub repo**
+  2. Select your repository
+  3. Railway detects `nixpacks.toml` and starts the first build automatically
+
+- [x] <a id="p17-s5"></a>**Step 5 — Add environment variables on Railway** 🔐
+
+  In your Railway project, go to **Variables** and add all the required environment variables. Use the same keys as your local `.env`:
+
+  ```env
+  DATABASE_URL="postgresql://postgres.<project-ref>:<password>@aws-1-us-west-2.pooler.supabase.com:5432/postgres"
+  BETTER_AUTH_SECRET=<your-secret>
+  BETTER_AUTH_URL=http://localhost:3000   
+
+  SUPABASE_URL=https://<project-ref>.supabase.co
+  SUPABASE_ANON_KEY=<your-anon-key>
+  SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+
+  STRIPE_SECRET_KEY=<your-stripe-secret-key>
+  RESEND_API_KEY=<your-resend-api-key>
+  ```
+
+  > Set `BETTER_AUTH_URL` to `http://localhost:3000` for now — it gets updated once you have your Railway domain in Step 7.
+
+- [x] <a id="p17-s6"></a>**Step 6 — Set the production domain** 🌐
+
+  Once the deploy succeeds, go to your service → **Settings → Networking → Generate Domain**. Railway provides a domain like:
+
+  ```
+  https://your-app-production.up.railway.app
+  ```
+
+  Copy this URL — you'll need it in the next step.
+
+- [x] <a id="p17-s7"></a>**Step 7 — Update `BETTER_AUTH_URL` and add `VITE_BETTER_AUTH_URL`** 🔑
+
+  Better Auth uses `BETTER_AUTH_URL` server-side to resolve redirects and cookie domains. It must match the actual deployment URL, not `localhost`.
+
+  Back in Railway **Variables**, update the existing variable and add a new one:
+
+  ```env
+  BETTER_AUTH_URL=https://your-app-production.up.railway.app
+  VITE_BETTER_AUTH_URL=https://your-app-production.up.railway.app
+  ```
+
+  `VITE_BETTER_AUTH_URL` is the client-side equivalent — Vite only exposes env vars prefixed with `VITE_` to the browser bundle. Without it, the auth client falls back to `localhost` and all sign-in requests go to the wrong host.
+
+  Don't forget to add `VITE_BETTER_AUTH_URL` to your local `.env` as well:
+
+  ```env
+  VITE_BETTER_AUTH_URL=http://localhost:3000
+  ```
+
+- [x] <a id="p17-s8"></a>**Step 8 — Update `src/lib/auth-client.ts`** 🔧
+
+  Update the auth client to read `VITE_BETTER_AUTH_URL` so it works correctly in both environments:
+
+  ```ts
+  import { createAuthClient } from "better-auth/react";
+
+  const baseURL =
+    import.meta.env.VITE_BETTER_AUTH_URL || "http://localhost:3000";
+
+  export const authClient = createAuthClient({
+    baseURL,
+  });
+
+  export const { signIn, signUp, useSession, signOut } = authClient;
+  ```
+
+  Without this change, the auth client hardcodes `localhost` as its base URL, which means all sign-in requests from the deployed app point to your local machine instead of the Railway server.
+
+- [x] <a id="p17-s9"></a>**Step 9 — Push and redeploy** ✅
+
+  Commit the `auth-client.ts` change and push:
+
+  ```bash
+  git add src/lib/auth-client.ts
+  git commit -m "fix: use VITE_BETTER_AUTH_URL for auth client base URL"
+  git push
+  ```
+
+  Railway detects the push and triggers a new build automatically. Once it completes, your app is fully deployed and sign-in works in production.
 
 ---
 
